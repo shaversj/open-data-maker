@@ -33,9 +33,9 @@ module DataMagic
       options[:only] = config.info_for_file(index, :only)
       options[:nest] = config.info_for_file(index, :nest)
       begin
-        logger.debug "*"*40
-        logger.debug "*    #{filepath}"
-        logger.debug "*"*40
+        logger.debug "--"*40
+        logger.debug "--    #{filepath}"
+        logger.debug "--"*40
         file_start = Time.now
         data = config.read_path(filepath)
         rows, _ = DataMagic.import_csv(data, options)
