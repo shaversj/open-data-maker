@@ -7,7 +7,7 @@ dependencies:
 #    - cf -v
   post:
     - if [[ ! -e elasticsearch-1.7.5 ]]; then wget https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-1.7.5.tar.gz && tar -xvf elasticsearch-1.7.5.tar.gz; fi
-    - elasticsearch-1.7.1/bin/elasticsearch: {background: true}
+    - elasticsearch-1.7.5/bin/elasticsearch: {background: true}
 
 #test:
 #  post:
