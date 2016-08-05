@@ -41,14 +41,26 @@ module DataMagic
 
   def self.s3
     if @s3.nil?
+      s3cred = {}
       if ENV['VCAP_APPLICATION']
         s3cred = ::CF::App::Credentials.find_by_service_name(ENV['s3_bucket_service'] || 'bservice')
-      else
-        s3cred = {'access_key'=>  ENV['s3_access_key'], 'secret_key' => ENV['s3_secret_key']}
+      end
+      if ENV.has_key?('s3_access_key') && ENV.has_key?('s3_secret_key')
+        if s3cred.empty?
+        s3cred = {
+            'access_key' => ENV['s3_access_key'],
+            'secret_key' => ENV['s3_secret_key']
+        }
+        else
+          s3cred['access_key'] = ENV['s3_access_key']
+          s3cred['secret_key'] = ENV['s3_secret_key']
+        end
       end
       logger.info "s3cred = #{s3cred.inspect}"
       if ENV['RACK_ENV'] != 'test'
-        ::Aws.config[:credentials] = ::Aws::Credentials.new(s3cred['access_key'], s3cred['secret_key'])
+        s3_access_key = s3cred['access_key'] || s3cred['access_key_id']
+        s3_secret_key = s3cred['secret_key'] || s3cred['secret_access_key']
+        ::Aws.config[:credentials] = ::Aws::Credentials.new(s3_access_key, s3_secret_key)
       end
       ::Aws.config[:region] = 'us-east-1'
       @s3 = ::Aws::S3::Client.new
