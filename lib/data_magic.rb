@@ -193,37 +193,44 @@ module DataMagic
 
   def self.base_index_hash(es_index_name, es_types)
     {
-      index: es_index_name,
-      body: {
-        settings: {
-          analysis: {
-            filter: {
-              autocomplete_filter: {
-                  type: 'edge_ngram',
-                  min_gram: 3,
-                  max_gram: 25
-              }
+        index: es_index_name,
+        body: {
+            settings: {
+                analysis: {
+                    filter: {
+                        autocomplete_filter: {
+                            type: 'edge_ngram',
+                            min_gram: 1,
+                            max_gram: 25,
+                        },
+                        autocomplete_word_delimiter: {
+                            type: 'word_delimiter',
+                            preserve_original: true,
+                            split_on_case_change:false,
+                            split_on_numerics: false,
+                            stem_english_possessive:false
+                        }
+                    },
+                    analyzer: {
+                        autocomplete_index: {
+                            tokenizer: 'whitespace',
+                            filter: ['lowercase', 'autocomplete_word_delimiter', 'autocomplete_filter'],
+                            type: 'custom'
+                        },
+                        autocomplete_search: {
+                            tokenizer: 'whitespace',
+                            filter: ['lowercase','autocomplete_word_delimiter'],
+                            type: 'custom'
+                        }
+                    }
+                }
             },
-            analyzer: {
-              autocomplete_index: {
-                tokenizer: 'standard',
-                filter: ['lowercase', 'stop', 'autocomplete_filter'],
-                type: 'custom'
-              },
-              autocomplete_search: {
-                tokenizer: 'standard',
-                filter: ['lowercase', 'stop'],
-                type: 'custom'
-              }
+            mappings: {
+                document: { # type 'document' is always used for external indexed docs
+                   properties: es_types
+                }
             }
-          }
-        },
-        mappings: {
-          document: { # type 'document' is always used for external indexed docs
-            properties: es_types
-          }
         }
-      }
     }
   end
 
