@@ -36,10 +36,10 @@ module DataMagic
 
     config.files[starting_from.to_i..-1].each_with_index do |filepath, index|
       fname = filepath.split('/').last
-      logger.debug "indexing #{fname} #{index} file config:#{config.additional_data_for_file(index).inspect}"
-      options[:add_data] = config.additional_data_for_file(index)
-      options[:only] = config.info_for_file(index, :only)
-      options[:nest] = config.info_for_file(index, :nest)
+      logger.debug "indexing #{fname} #{starting_from + index} file config:#{config.additional_data_for_file(starting_from + index).inspect}"
+      options[:add_data] = config.additional_data_for_file(starting_from + index)
+      options[:only] = config.info_for_file(starting_from + index, :only)
+      options[:nest] = config.info_for_file(starting_from + index, :nest)
       begin
         logger.debug "--"*40
         logger.debug "--    #{filepath}"
