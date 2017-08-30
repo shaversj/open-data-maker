@@ -194,8 +194,8 @@ module DataMagic
   end
 
   def self.base_index_hash(es_index_name, es_types)
-    shard_number = (ENV['RACK_ENV'] == 'test') ? 1 : 3
-    replica_number = (ENV['RACK_ENV'] == 'test') ? 0 : 2
+    shard_number = (RACK_ENV == 'test') ? 1 : 3
+    replica_number = (RACK_ENV == 'test') ? 0 : 2
     {
         index: es_index_name,
         body: {
