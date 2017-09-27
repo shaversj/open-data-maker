@@ -44,7 +44,6 @@ group :test do
 end
 
 group 'dev' do
-  gem 'google_drive'
   gem 'ruby-prof'
 
 end
