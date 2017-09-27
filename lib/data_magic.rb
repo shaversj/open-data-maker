@@ -194,12 +194,14 @@ module DataMagic
   end
 
   def self.base_index_hash(es_index_name, es_types)
+    shard_number = (RACK_ENV == 'test') ? 1 : 3
+    replica_number = (RACK_ENV == 'test') ? 0 : 2
     {
         index: es_index_name,
         body: {
             settings: {
-                number_of_shards: 1,
-                number_of_replicas: 0,
+                number_of_shards: shard_number,
+                number_of_replicas: replica_number,
                 analysis: {
                     filter: {
                         autocomplete_filter: {
