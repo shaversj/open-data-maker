@@ -67,7 +67,7 @@ GEM
     multipart-post (2.0.0)
     mustermann19 (0.4.4)
       enumerable-lazy
-    newrelic_rpm (4.4.0.336)
+    newrelic_rpm (3.18.1.330)
     nokogiri (1.8.1)
       mini_portile2 (~> 2.3.0)
     oj (2.12.13)
@@ -192,7 +192,7 @@ DEPENDENCIES
   typhoeus
 
 RUBY VERSION
-   ruby 2.3.4p301
+   ruby 2.3.5p376
 
 BUNDLED WITH
-   1.14.6
+   1.15.4
