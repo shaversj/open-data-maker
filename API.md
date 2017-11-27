@@ -199,11 +199,13 @@ You can also change the number of records returned per page using the `_per_page
 
 ### Sorting with `_sort`
 
-To sort results by a given field, use the `_sort` option parameter. For example, `_sort=population` will return records sorted by population size, in ascending order.
+To sort results by a given field, use the `_sort` option parameter. For example, `_sort=2015.student.size` will return records sorted by 2015 student size, in ascending order.
 
-By default, using the `_sort_` option returns records sorted into ascending order, but you can specify ascending or descending order by appending `:asc` or `:desc` to the field name. For example: `_sort=population:desc`
+By default, using the `_sort_` option returns records sorted into ascending order, but you can specify ascending or descending order by appending `:asc` or `:desc` to the field name. For example: `_sort=2015.student.size:desc`
 
 **Note:** Sorting is only availble on fields with the data type `integer`, `float`, `autocomplete` or `name`.
+
+**Note:** Make sure the sort parameter is a field in the data set. For more information, please take a look at [data dictionary](https://collegescorecard.ed.gov/assets/CollegeScorecardDataDictionary.xlsx)
 
 ### Geographic Filtering with `_zip` and `_distance`
 
