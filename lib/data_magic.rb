@@ -143,7 +143,6 @@ module DataMagic
         # now it should look like this:
         # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace, "children" => [{...}, {...}, {...}]}
 
-
         # re-insert null fields that didn't get returned by ES
         query_body[:fields].each do |field|
           if !found.has_key?(field) && !delete_set.include?(field)
@@ -152,7 +151,7 @@ module DataMagic
         end
 
         # convert dotted-keys to nested json
-        NestedHash.new.add(found, true)
+        NestedHash.new(found)
       end
     end
 
@@ -247,8 +246,8 @@ module DataMagic
         index: es_index_name,
         body: {
             settings: {
-                number_of_shards: 1,
-                number_of_replicas: 0,
+                number_of_shards: shard_number,
+                number_of_replicas: replica_number,
                 analysis: {
                     filter: {
                         autocomplete_filter: {

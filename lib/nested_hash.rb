@@ -5,16 +5,13 @@ class NestedHash < Hash
     self.add(hash)
   end
 
-  def add(hash, hi = false)
+  def add(hash)
 
     hash.each do |full_name, value|
       parts = full_name.to_s.split('.')
       last = parts.length - 1
       add_to = self
       parts.each_with_index do |name, index|
-        if hi
-
-        end
         if index == last
           add_to[name] = value
         else
