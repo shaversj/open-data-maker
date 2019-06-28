@@ -20,6 +20,41 @@ module DataMagic
 
         if options[:fields] && !options[:fields].empty?
           query_hash[:fields] = get_restrict_fields(options)
+
+          nested_set = Set[]
+
+          # determine if any fields are associated with a nested-query type
+          query_hash[:fields].each do |f|
+
+            key = f
+            first = ''
+            if config.dictionary[key].nil?
+              first, *keys = f.split('.')
+              key = keys.join('.')
+              first = first + '.'
+            end
+            config_field = config.dictionary[key]
+            field_map = config_field[:map.to_s]
+            if config.partial_doc_map[field_map]
+              path = first + config.partial_doc_map[field_map]['path']
+              nested_set.add(path)
+            end
+          end
+
+          # build nested path queries for the inner_hits
+          query_nested = nested_set.map do |path|
+            { nested: {
+                path: path,
+                query: {
+                    match_all: {}
+                },
+                inner_hits: {}
+              }
+            }
+          end
+
+          query_hash[:query][:bool] = {filter: query_nested}
+          query_hash[:query].except!(:match_all)
           query_hash[:_source] = false
         else
           query_hash[:_source] = {

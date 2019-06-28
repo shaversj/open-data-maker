@@ -99,10 +99,19 @@ module DataMagic
             new_doc[key] = {}
             new_doc['id'] = document['id'] unless document['id'].nil?
             nest_options['contents'].each do |item_key|
+              unless options[:partial_map].nil?
+                parse_nested_partial(document, options)
+              end
               new_doc[key][item_key] = document[item_key]
             end
           end
           new_doc
+        end
+
+        def parse_nested_partial(doc, options)
+          path = options[:partial_map]['path'].split('.')
+          # wrap real (ES) nested partial doc in an array
+          doc.dotkey_set(path.join('.'), [doc.dig(*path)])
         end
 
         def fix_field_type(type, value, key=nil)

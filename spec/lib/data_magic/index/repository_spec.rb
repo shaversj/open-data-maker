@@ -4,7 +4,7 @@ require 'data_magic'
 describe DataMagic::Index::Repository do
   let(:repository) { DataMagic::Index::Repository.new(super_client, document) }
 
-  let(:super_client) { double('super client', index_name: 'index') }
+  let(:super_client) { double('super client', {index_name: 'index', nested_partial?: false}) }
   let(:document) { double('document', {id: 'id', data: 'data'}) }
 
   context 'when super client is creating' do

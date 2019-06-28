@@ -5,12 +5,16 @@ class NestedHash < Hash
     self.add(hash)
   end
 
-  def add(hash)
+  def add(hash, hi = false)
+
     hash.each do |full_name, value|
       parts = full_name.to_s.split('.')
       last = parts.length - 1
       add_to = self
       parts.each_with_index do |name, index|
+        if hi
+
+        end
         if index == last
           add_to[name] = value
         else
@@ -49,6 +53,19 @@ class NestedHash < Hash
       end
     end
     human_names
+  end
+
+  # set a new or existing nested key's value by a dotted-string key
+  def dotkey_set(dottedkey, value, deep_hash = self)
+    keys = dottedkey.to_s.split('.')
+    first = keys.first
+    if keys.length == 1
+      deep_hash[first] = value
+    else
+      # in the case that we are creating a hash from a dotted key, we'll assign a default
+      deep_hash[first] = (deep_hash[first] || {})
+      dotkey_set(keys.slice(1..-1).join('.'), value, deep_hash[first])
+    end
   end
 
 end

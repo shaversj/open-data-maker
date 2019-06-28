@@ -10,6 +10,7 @@ require 'aws-sdk'
 require 'uri'
 require 'cf-app-utils'
 require 'logger'
+require 'set'
 
 require_relative 'data_magic/config'
 require_relative 'data_magic/index'
@@ -101,26 +102,57 @@ module DataMagic
     total = hits["total"]
     results = []
     unless query_body.has_key? :fields
+      # binding.pry
       # we're getting the whole document and we can find in _source
       results = hits["hits"].map {|hit| hit["_source"]}
     else
       # we're getting a subset of fields...
       results = hits["hits"].map do |hit|
         found = hit.fetch("fields", {})
-        # each result looks like this:
-        # {"city"=>["Springfield"], "address"=>["742 Evergreen Terrace"]}
+        inner = hit.fetch("inner_hits", {})
+        delete_set = Set[]
 
-        found.keys.each { |key| found[key] = found[key][0] }
+
+        inner.keys.each do |inn_key|
+          leaf_set = Set[]
+          found.keys.each do |key|
+            if key.start_with? inn_key
+              full = key.split('.')
+              base = inn_key.split('.')
+              leafs = full - base
+              leaf_set.add(leafs.join('.'))
+              delete_set.add(key)
+            end
+          end
+
+          leaf_items = inner[inn_key]['hits']['hits'].map do |h|
+            hash = NestedHash.new
+            leaf_set.each do |l|
+              val = h['_source'].dig(*(l.to_s.split('.')))
+              hash.dotkey_set(l, val)
+            end
+            hash
+          end
+          found[inn_key] = leaf_items
+        end
+
+        delete_set.each { |k| found.delete k }
+        # each result looks like this:
+        # {"city"=>["Springfield"], "address"=>["742 Evergreen Terrace"], "children" => [{...}, {...}, {...}] }
+        found.keys.each { |key| found[key] = found[key].length > 1 ? found[key] : found[key][0] }
         # now it should look like this:
-        # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace}
+        # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace, "children" => [{...}, {...}, {...}]}
+
 
         # re-insert null fields that didn't get returned by ES
         query_body[:fields].each do |field|
-          if !found.has_key?(field)
+          if !found.has_key?(field) && !delete_set.include?(field)
             found[field] = nil
           end
         end
-        found
+
+        # convert dotted-keys to nested json
+        NestedHash.new.add(found, true)
       end
     end
 
@@ -161,16 +193,31 @@ module DataMagic
 
   private
 
-  def self.nested_object_type(hash)
+  def self.document_data_type(hash, root='')
     hash.each do |key, value|
       if value.is_a?(Hash) && value[:type].nil?  # things are nested under this
+        dotted_path = root + key
+        data_type = get_data_type(dotted_path)
         hash[key] = {
-          type: 'object',
+          type: data_type,
           properties: value
         }
-        nested_object_type(value)
+        # need to include nested data-type values in parent document
+        hash[key][:include_in_parent] = true if data_type === 'nested'
+        document_data_type(value, dotted_path + '.')
       end
     end
+  end
+
+  def self.get_data_type(dotted_path)
+      default_type = 'object'
+      self.config.es_data_types.each do |key, types|
+        if types.include?(dotted_path)
+          default_type = key
+          break
+        end
+      end
+      default_type
   end
 
   def self.create_index(es_index_name = nil, field_types={})
@@ -178,7 +225,7 @@ module DataMagic
     es_index_name ||= self.config.scoped_index_name
     field_types['location'] = 'lat_lon' # custom lat_lon type maps to geo_point with additional field options
     es_types = NestedHash.new.add(es_field_types(field_types))
-    nested_object_type(es_types)
+    document_data_type(es_types)
     begin
       logger.info "====> creating index with type mapping"
       client.indices.create base_index_hash(es_index_name, es_types)
@@ -200,8 +247,8 @@ module DataMagic
         index: es_index_name,
         body: {
             settings: {
-                number_of_shards: shard_number,
-                number_of_replicas: replica_number,
+                number_of_shards: 1,
+                number_of_replicas: 0,
                 analysis: {
                     filter: {
                         autocomplete_filter: {

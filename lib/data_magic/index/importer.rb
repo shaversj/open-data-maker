@@ -3,11 +3,12 @@ require 'forwardable'
 module DataMagic
   module Index
     class Importer
-      attr_reader :raw_data, :options
+      attr_reader :raw_data, :options, :row_map
 
-      def initialize(raw_data, options)
+      def initialize(raw_data, options, row_map)
         @raw_data = raw_data
         @options = options
+        @row_map = row_map
       end
 
       def process
@@ -24,6 +25,10 @@ module DataMagic
 
       def builder_data
         @builder_data ||= BuilderData.new(raw_data, options)
+      end
+
+      def row_map
+        @row_map || {}
       end
 
       def output
@@ -60,7 +65,7 @@ module DataMagic
           headers: true,
           header_converters: lambda { |str| str.strip.to_sym }
         ).each do |row|
-          RowImporter.process(row, self)
+          dispatch_row_importer(row)
           break if at_limit?
         end
       end
@@ -75,7 +80,7 @@ module DataMagic
           chunks_per_proc = (chunk.size / nprocs.to_f).ceil
           Parallel.each(chunk.each_slice(chunks_per_proc)) do |rows|
             rows.each_with_index do |row, idx|
-              RowImporter.process(row, self)
+              dispatch_row_importer(row)
             end
           end
           if !headers
@@ -86,6 +91,23 @@ module DataMagic
         end
       end
 
+      def dispatch_row_importer(row)
+        if client.nested_partial?
+          row_id = lookup_row_id(row)
+          Array(row_map.map[row_id]).each do |related_id|
+            row << [row_map.id, related_id]
+            RowImporter.process(row, self)
+          end
+        else
+          RowImporter.process(row, self)
+        end
+      end
+
+      def lookup_row_id(row)
+        link = row_map.calculate_column(options[:partial_map]['link'])
+        row.to_hash[link]
+      end
+
       def setup
         client.create_index
         log_setup
@@ -93,7 +115,7 @@ module DataMagic
 
       def finish!
         validate!
-        refresh_index if ENV['RACK_ENV'] == 'test' # refresh for tests only
+        refresh_index if ENV['RACK_ENV'] == 'test'
         log_finish
       end
 

@@ -108,11 +108,31 @@ def get_search_args_from_params(params)
   options[:format]   = params.delete("format")       # supplied by Padrino;
   params.delete(:format) unless params[:format].nil? # format param duplicated if in url request
 
-  options[:fields]   = (options[:fields]   || "").split(',')
+  options[:fields]   = get_fields_selected_from_params((options[:fields] || '').split(','))
   options[:command]  = params.delete("command")
 
   options[:metrics] = options[:metrics].split(/\s*,\s*/) if options[:metrics]
   options
+end
+
+def get_fields_selected_from_params(fields_params)
+  fields = []
+  fields_params.each do |field_name|
+      if DataMagic.config.field_type(field_name)
+        fields.push(field_name)
+      else
+        # Expand 'complete' partial field name to full path(s) (`2014.academics` expands but `2014.acade` will not)
+        field_name_period = (field_name.end_with? '.') ? field_name : field_name + '.'
+        matches = DataMagic.config.field_types.select { |key| key.start_with? field_name_period }
+        if matches.empty?
+          # Let Error Checker catch this
+          fields.push(field_name)
+          next
+        end
+        matches.each_key {|k| fields.push(k) }
+      end
+  end
+  fields
 end
 
 def output_data_as_csv(results)

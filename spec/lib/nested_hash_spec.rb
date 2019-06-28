@@ -3,6 +3,7 @@ require 'nested_hash'
 describe NestedHash do
   let(:input) { {"loc.x" => 1, "loc.y" => 2, "foo.a" => 10, "foo.b" => 20, "foo.c.baz" => 3,}}
   let(:expected) {{"loc" => {"x" => 1, "y" => 2}, "foo" => {"a" => 10, "b" => 20, "c" => { "baz" => 3}}}}
+  let(:expected_updated) {{"loc" => {"x" => 1, "y" => 2}, "foo" => {"a" => 10, "b" => 20, "c" => { "baz" => "buzz"}}}}
 
   let(:symbol_keys) { {x:1, y:2}}
   let(:symbol_keys_result) { {'x' => 1, 'y' => 2}}
@@ -33,6 +34,11 @@ describe NestedHash do
 
     it "dotkeys and withdotkeys have same order" do
       expect(result.withdotkeys.keys).to eq(result.dotkeys)
+    end
+
+    it "can set a nested key's value by a dotted-string" do
+      result.dotkey_set('foo.c.baz', 'buzz')
+      expect(result).to eq(expected_updated)
     end
   end
 
