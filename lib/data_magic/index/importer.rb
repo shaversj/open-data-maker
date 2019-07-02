@@ -93,16 +93,19 @@ module DataMagic
       end
 
       def parse_csv_mapped
-        CSV.new(
+        chunks_of_chunks = CSV.new(
           data,
           headers: true,
           header_converters: lambda { |str| str.strip.to_sym }
         ).chunk_while { |a, b|
           # chunk by nested document link
           lookup_row_id(a) === lookup_row_id(b)
-        }.each do |chunk|
-          break if at_limit?
-          dispatch_row_importer(chunk)
+        }.to_a
+        chunks_per_proc = (chunks_of_chunks.size / nprocs.to_f).ceil
+        Parallel.each(chunks_of_chunks.each_slice(chunks_per_proc)) do |chunks|
+          chunks.each do |chunk|
+            dispatch_row_importer(chunk)
+          end
         end
       end
 
