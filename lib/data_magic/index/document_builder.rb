@@ -39,10 +39,16 @@ module DataMagic
           doc
         end
 
-        def create(*args)
-          Document.new(
-            build(*args)
-          )
+        def create(row, builder_data, config)
+          if !row.is_a?(Array)
+            Document.new(build(row, builder_data, config))
+          else
+            docs = []
+            row.each do |r|
+              docs.push( Document.new(build(r, builder_data, config)))
+            end
+            docs
+          end
         end
 
         private

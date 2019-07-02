@@ -15,7 +15,6 @@ module DataMagic
         setup
         parse_and_log
         finish!
-
         [row_count, headers]
       end
 
@@ -53,6 +52,8 @@ module DataMagic
       def parse_csv
         if nprocs == 1
           parse_csv_whole
+        elsif client.nested_partial?
+          parse_csv_mapped
         else
           parse_csv_chunked
         end
@@ -91,15 +92,43 @@ module DataMagic
         end
       end
 
+      def parse_csv_mapped
+        CSV.new(
+          data,
+          headers: true,
+          header_converters: lambda { |str| str.strip.to_sym }
+        ).chunk_while { |a, b|
+          # chunk by nested document link
+          lookup_row_id(a) === lookup_row_id(b)
+        }.each do |chunk|
+          break if at_limit?
+          dispatch_row_importer(chunk)
+        end
+      end
+
       def dispatch_row_importer(row)
         if client.nested_partial?
-          row_id = lookup_row_id(row)
-          Array(row_map.map[row_id]).each do |related_id|
-            row << [row_map.id, related_id]
-            RowImporter.process(row, self)
+          if row.is_a?(Array)
+            dispatch_row_bulk_importer(row)
+          else
+            row_id = lookup_row_id(row)
+            Array(row_map.map[row_id]).each do |related_id|
+              row << [row_map.id, related_id]
+              RowImporter.process(row, self)
+            end
           end
         else
           RowImporter.process(row, self)
+        end
+      end
+
+      def dispatch_row_bulk_importer(rows)
+        row_id = lookup_row_id(rows[0])
+        Array(row_map.map[row_id]).each do |related_id|
+          rows.each do |row|
+            row << [row_map.id, related_id]
+          end
+          RowBulkImporter.process(rows, self)
         end
       end
 
