@@ -78,14 +78,13 @@ module DataMagic
         # extract some keys of the dotted path
         path_keys = partial_path.split('.')
         first = path_keys.first
-        key = root_key + '.' + first
         path_keys = path_keys.unshift(root_key)
 
         # extract the current row's nested data, in the case we're appending to an exiting array
         nested_item = document.data.dig(*path_keys)[0]
 
         # this script will either create the new nested array if it doesn't exist, or append the nested item
-        script = "if (ctx._source.#{key} == null) { ctx._source.#{root_key}.#{first} = data.#{root_key}.#{first}; } else { ctx._source.#{root_key}.#{partial_path} += inner; }"
+        script = "if (ctx._source['#{root_key}'].#{first} == null) { ctx._source['#{root_key}'].#{first} = data['#{root_key}'].#{first}; } else { ctx._source['#{root_key}'].#{partial_path} += inner; }"
         doc[:body] = { script: script, params: { inner: nested_item, data: document.data } }
         doc[:retry_on_conflict] = 5
         client.update(doc)
@@ -99,15 +98,13 @@ module DataMagic
         # extract some keys of the dotted path
         path_keys = partial_path.split('.')
         first = path_keys.first
-        key = root_key + '.' + first
         path_keys = path_keys.unshift(root_key)
 
         nested_items = document.map do |doc|
           doc.data.dig(*path_keys)[0]
         end
 
-
-        hash = NestedHash.new({})
+        hash = NestedHash.new
         hash.dotkey_set(path_keys.join('.'), nested_items)
 
         doc = {
@@ -116,7 +113,8 @@ module DataMagic
             type: 'document',
             timeout: '5m'
         }
-        script = "if (ctx._source.#{key} == null) { ctx._source.#{root_key}.#{first} = data.#{root_key}.#{first}; } else { ctx._source.#{root_key}.#{partial_path} = inner; }"
+        # this script will either create the full object path and new nested array if it doesn't exist already, or create the new nested items array
+        script = "if (ctx._source['#{root_key}'] == null) { ctx._source['#{root_key}'] = data['#{root_key}']; } else { if (ctx._source['#{root_key}'].#{first} == null) { ctx._source['#{root_key}'].#{first} = data['#{root_key}'].#{first}; } else { ctx._source['#{root_key}'].#{partial_path} = inner; } }"
         doc[:body] = { script: script, params: { inner: nested_items, data: hash } }
         doc[:retry_on_conflict] = 5
         client.update(doc)
