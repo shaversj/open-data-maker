@@ -93,7 +93,7 @@ module DataMagic
       end
 
       def parse_csv_mapped
-        chunks_of_chunks = CSV.new(
+        rocky_chunks = CSV.new(
           data,
           headers: true,
           header_converters: lambda { |str| str.strip.to_sym }
@@ -101,12 +101,23 @@ module DataMagic
           # chunk by nested document link
           lookup_row_id(a) === lookup_row_id(b)
         }.to_a
-        chunks_per_proc = (chunks_of_chunks.size / nprocs.to_f).ceil
-        Parallel.each(chunks_of_chunks.each_slice(chunks_per_proc)) do |chunks|
+
+        # rearrange chunks for parallel processing, so our slices are 'roughly' the same size
+        sorted = rocky_chunks.sort_by(&:size)
+        grouped = sorted.each.each_with_index.group_by { |_, index| index % nprocs }
+        smooth_chunks = grouped.map { |_, data|
+          # here we only return the first array , each_with_index was adding in an unwanted index item
+          data.map(&:first)
+        }.flatten(1)
+
+        chunks_per_proc = (smooth_chunks.size / nprocs.to_f).ceil
+
+        Parallel.each(smooth_chunks.each_slice(chunks_per_proc)) do |chunks|
           chunks.each do |chunk|
             dispatch_row_importer(chunk)
           end
         end
+        increment(smooth_chunks.size)
       end
 
       def dispatch_row_importer(row)
