@@ -53,23 +53,23 @@ module DataMagic
             }
           end
 
-          # incorporate nested inner_hit query with any existing queries
-          if query_hash[:query].except(:match_all).keys
-            # only remove if there is some filter query
-            query_hash[:query].except!(:match_all)
-            query_hash[:query][:bool] ||= {}
-            # create or append to our query filter the new nested query
-            (query_hash[:query][:bool][:filter] ||= []) | query_nested
-            # add range queries if they exist
-            query_hash[:query][:bool][:filter].push({ or:  query_hash[:query][:or] }) unless query_hash[:query][:or].nil?
-            query_hash[:query].except!(:or)
-            # create or append to a `must` query array if any terms are present
-            (query_hash[:query][:bool][:must]||= []) | [{terms: query_hash[:query][:terms]}] unless query_hash[:query][:terms].nil?
-            query_hash[:query].except!(:terms)
-          else
-            # will need to add this regardless for our nested inner_hits
-            query_hash[:query][:bool] = { filter: query_nested }
+          query_hash[:query].except!(:match_all) unless query_hash[:query][:bool].nil?
+
+              # incorporate nested inner_hit query with any existing queries
+          if query_hash[:query][:bool]
+            if query_hash[:query][:bool][:filter]
+              query_hash[:query][:bool][:filter] += query_nested
+            else
+              query_hash[:query][:bool][:filter] = query_nested
+            end
+            if query_hash[:query][:bool][:must]
+              query_hash[:query][:bool][:must] += {terms: query_hash[:query][:terms]} unless query_hash[:query][:terms].nil?
+            else
+              query_hash[:query][:bool][:must] = {terms: query_hash[:query][:terms]} unless query_hash[:query][:terms].nil?
+            end
           end
+
+          query_hash[:query].except!( :terms)
 
           query_hash[:_source] = false
         else
