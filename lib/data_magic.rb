@@ -102,17 +102,17 @@ module DataMagic
     total = hits["total"]
     results = []
     unless query_body.has_key? :fields
-      # binding.pry
       # we're getting the whole document and we can find in _source
       results = hits["hits"].map {|hit| hit["_source"]}
     else
       # we're getting a subset of fields...
       results = hits["hits"].map do |hit|
         found = hit.fetch("fields", {})
+        # nested fields are defined under source
+        nested = hit.fetch("_source", {})
         inner = hit.fetch("inner_hits", {})
         delete_set = Set[]
-
-
+        
         inner.keys.each do |inn_key|
           leaf_set = Set[]
           found.keys.each do |key|
@@ -142,7 +142,10 @@ module DataMagic
         found.keys.each { |key| found[key] = found[key].length > 1 ? found[key] : found[key][0] }
         # now it should look like this:
         # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace, "children" => [{...}, {...}, {...}]}
-
+        
+        # Combine nested fields from source and fields after found is processed
+        found = found.merge(nested)
+        
         # re-insert null fields that didn't get returned by ES
         query_body[:fields].each do |field|
           if !found.has_key?(field) && !delete_set.include?(field)

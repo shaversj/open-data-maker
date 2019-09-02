@@ -18,6 +18,19 @@ module DataMagic
           query_hash.merge! add_aggregations(params, options, config)
         end
 
+        # Source filter will contain fields that are nested, which should be returned in the response
+        source_filter = options[:source_include] ? { include: options[:source_include] } : {}
+
+        if !source_filter.empty?
+          query_hash[:_source] = source_filter
+        elsif ( source_filter.empty? && options[:fields] && !options[:fields].empty? )
+          # if non-nested fields exist, then source should be false
+          query_hash[:_source] = false
+        else
+          # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
+          query_hash[:_source] = { exclude: ["_*"] }
+        end
+
         if options[:fields] && !options[:fields].empty?
           query_hash[:fields] = get_restrict_fields(options)
 
@@ -25,7 +38,6 @@ module DataMagic
 
           # determine if any fields are associated with a nested-query type
           query_hash[:fields].each do |f|
-
             key = f
             first = ''
             if config.dictionary[key].nil?
@@ -55,7 +67,7 @@ module DataMagic
 
           query_hash[:query].except!(:match_all) unless query_hash[:query][:bool].nil?
 
-              # incorporate nested inner_hit query with any existing queries
+          # incorporate nested inner_hit query with any existing queries
           if query_hash[:query][:bool]
             if query_hash[:query][:bool][:filter]
               query_hash[:query][:bool][:filter] += query_nested
@@ -70,13 +82,8 @@ module DataMagic
           end
 
           query_hash[:query].except!( :terms)
-
-          query_hash[:_source] = false
-        else
-          query_hash[:_source] = {
-                      exclude: ["_*"]
-                    }
         end
+
         query_hash[:sort] = get_sort_order(options[:sort], config) if options[:sort] && !options[:sort].empty?
         query_hash
       end
