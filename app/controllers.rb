@@ -125,7 +125,9 @@ def get_nested_types()
 end
 
 def has_nested_field(split_fields_params)
-  split_fields_params.any? { |field| get_nested_types().any? {|nested| nested.start_with? field }}
+  if get_nested_types()
+    split_fields_params.any? { |field| get_nested_types().any? {|nested| nested.start_with? field }}
+  end
 end
 
 def get_sources_for_nested_doc(split_fields_params)
@@ -153,7 +155,7 @@ def get_fields_selected_from_params(split_fields_params)
       if DataMagic.config.field_type(field_name)
         fields.push(field_name)
       # Check if the field is a nested type - these should be listed under source => include, rather than under fields
-      elsif get_nested_types().any? {|nested| nested.start_with? field_name }
+      elsif (get_nested_types() && get_nested_types().any? {|nested| nested.start_with? field_name })
         next
       else
         # Expand 'complete' partial field name to full path(s) (`2014.academics` expands but `2014.acade` will not)
