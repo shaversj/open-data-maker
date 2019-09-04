@@ -98,6 +98,10 @@ describe DataMagic::QueryBuilder do
   end
 
   describe "can specify fields to return" do
+    before do
+      ENV['DATA_PATH'] = './spec/fixtures/school_names'
+      DataMagic.config = DataMagic::Config.new
+    end
     subject { {} }
     let(:options) { { fields: ["id" ,"school.name"] } }
     let(:expected_query) { { match_all: {} } }
