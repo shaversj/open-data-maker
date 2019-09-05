@@ -153,8 +153,10 @@ module DataMagic
           end
         end
 
-        # convert dotted-keys to nested json
-        NestedHash.new(found)
+        # The following converts dotted-keys to nested json; 
+        # NestedHash.new(found)
+        # Leave as `found` for dotted keys
+        found
       end
     end
 
