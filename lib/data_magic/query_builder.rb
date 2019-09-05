@@ -18,19 +18,23 @@ module DataMagic
           query_hash.merge! add_aggregations(params, options, config)
         end
 
-        # Source filter will contain fields that are nested, which should be returned in the response
+        # Source filter will contain fields that come from nested datatypes (not to be confused with nested fields, as a structure)
         source_filter = options[:source_include] ? { include: options[:source_include] } : {}
 
         if !source_filter.empty?
           query_hash[:_source] = source_filter
         elsif ( source_filter.empty? && options[:fields] && !options[:fields].empty? )
-          # if non-nested fields exist, then source should be false
+          # if fields from a nested datatype don't exist, then source should be false
           query_hash[:_source] = false
         else
           # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
           query_hash[:_source] = { exclude: ["_*"] }
         end
-
+        
+        
+        # TODO - I think the next few blocks of code might be relevant to solving the adjacent non-matching objects problem
+        # ALso, should conditional incorporate reference to :source_include??
+        # if options[:fields] && !options[:fields].empty? || options[:source_include] && !options[:source_include].empty?
         if options[:fields] && !options[:fields].empty?
           query_hash[:fields] = get_restrict_fields(options)
 
