@@ -200,16 +200,24 @@ describe "DataMagic #search" do
       expect(result).to eq(expected)
     end
 
-    it "#search with a fields filter can return location.lat and location.lon values" do
-      sf_location = { lat: 37.727239, lon: -123.032229 }
-      DataMagic.logger.debug "sfo_location[:lat] #{sf_location[:lat].class} #{sf_location[:lat].inspect}"
-      response = DataMagic.search({city: "San Francisco"}, {:fields => ["location.lat", "location.lon"]})
-      result = response["results"][0]
-      expect(result.keys.length).to eq(2)
-      expect(result).to include("location.lat")
-      expect(result).to include("location.lat")
-      expect(result["location.lat"]).to eq sf_location[:lat]
-      expect(result["location.lon"]).to eq sf_location[:lon]
+    describe "with dictionary" do
+      before do
+        DataMagic.destroy
+        ENV['DATA_PATH'] = './spec/fixtures/import_with_dictionary'
+        DataMagic.init(load_now: true)
+      end
+
+      it "#search with a fields filter can return location.lat and location.lon values" do
+        chicago_location = { latitude: "41.837551", longitude: "-87.681844" }
+        DataMagic.logger.debug "sfo_location[:latitude] #{chicago_location[:latitude].class} #{chicago_location[:latitude].inspect}"
+        response = DataMagic.search({name: "Chicago"}, {:fields => ["latitude", "longitude"]})
+        result = response["results"][0]
+        expect(result.keys.length).to eq(2)
+        expect(result).to include("latitude")
+        expect(result).to include("latitude")
+        expect(result["latitude"]).to eq chicago_location[:latitude]
+        expect(result["longitude"]).to eq chicago_location[:longitude]
+      end
     end
   end
 
