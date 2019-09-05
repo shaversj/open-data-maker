@@ -11,6 +11,7 @@ require_relative 'index/output'
 require_relative 'index/repository'
 require_relative 'index/row_importer'
 require_relative 'index/super_client'
+require_relative 'index/row_map'
 
 require 'action_view'  # for distance_of_time_in_words (logging time)
 include ActionView::Helpers::DateHelper  # for distance_of_time_in_words (logging time)
