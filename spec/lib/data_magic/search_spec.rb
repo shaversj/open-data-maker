@@ -53,10 +53,14 @@ describe "DataMagic #search" do
       end
 
       describe "returning attributes with a dictionary" do
-        before do
+        before(:all) do
           DataMagic.destroy
           ENV['DATA_PATH'] = './spec/fixtures/import_with_dictionary'
           DataMagic.init(load_now: true)
+        end
+
+        after(:all) do
+          DataMagic.destroy
         end
 
         it "can return a single attribute" do
@@ -84,18 +88,29 @@ describe "DataMagic #search" do
       end
 
       describe "supports pagination" do
+        before(:all) do
+          DataMagic.destroy
+          ENV['DATA_PATH'] = './spec/fixtures/import_with_dictionary'
+          DataMagic.init(load_now: true)
+        end
+
+        after(:all) do
+          DataMagic.destroy
+        end
+
+        let(:result_1) { DataMagic.search({ state: "TX" }, page:1, per_page: 3) }
+        let(:result_2) { DataMagic.search({}, page:1) }
+
         it "can specify both page and page size" do
-          result = DataMagic.search({ address: "Lane" }, page:1, per_page: 3)
-          expect(result['metadata']["per_page"]).to eq(3)
-          expect(result['metadata']["page"]).to eq(1)
-          expect(result["results"].length).to eq(1)
+          expect(result_1['metadata']["per_page"]).to eq(3)
+          expect(result_1['metadata']["page"]).to eq(1)
+          expect(result_1["results"].length).to eq(3)
         end
 
         it "can use a default page size" do
-          result = DataMagic.search({}, page:1)
-          expect(result['metadata']["per_page"]).to eq(DataMagic::DEFAULT_PAGE_SIZE)
-          expect(result['metadata']["page"]).to eq(1)
-          expect(result["results"].length).to eq(0)
+          expect(result_2['metadata']["per_page"]).to eq(DataMagic::DEFAULT_PAGE_SIZE)
+          expect(result_2['metadata']["page"]).to eq(1)
+          expect(result_2["results"].length).to eq(20)
         end
       end
     end
