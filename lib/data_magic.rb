@@ -363,7 +363,7 @@ module DataMagic
     # logger.info "options: #{options.inspect}"
     # logger.info "self.config: #{self.config.inspect}"
     if self.config.nil?   # only init once
-      ::Aws.eager_autoload!       # see https://github.com/aws/aws-sdk-ruby/issues/833
+      #::Aws.eager_autoload!       # see https://github.com/aws/aws-sdk-ruby/issues/833
       self.config = Config.new(s3: self.s3)    # loads data.yaml
       self.client   # make sure we can set up the Elasticsearch client
       self.index_data_if_needed unless options[:load_now] == false

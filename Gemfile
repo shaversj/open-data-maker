@@ -1,5 +1,5 @@
 source 'https://rubygems.org'
-ruby '2.3.8'
+ruby '2.6.3'
 
 # Distribute your app as a gem
 # gemspec
@@ -20,7 +20,7 @@ gem 'cf-app-utils'
 #gem 'unicorn'
 gem 'puma'
 gem 'safe_yaml'
-gem 'aws-sdk', '~> 2'
+gem 'aws-sdk', '~> 3'
 gem 'actionview'
 gem 'dotenv'
 gem 'oj'
