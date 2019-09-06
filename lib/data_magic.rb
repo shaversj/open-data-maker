@@ -108,11 +108,12 @@ module DataMagic
       # we're getting a subset of fields...
       results = hits["hits"].map do |hit|
         found = hit.fetch("fields", {})
-        # nested fields are defined under source
-        nested = hit.fetch("_source", {})
+        # fields requested from a from_nested_data_type are defined under _source
+        # unless a query term is also a nested data type, in this case, see inner hits
+        from_source = hit.fetch("_source", {})
         inner = hit.fetch("inner_hits", {})
         delete_set = Set[]
-        
+
         inner.keys.each do |inn_key|
           leaf_set = Set[]
           found.keys.each do |key|
@@ -144,7 +145,7 @@ module DataMagic
         # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace, "children" => [{...}, {...}, {...}]}
         
         # Combine nested fields from source and fields after found is processed
-        found = found.merge(nested)
+        found = found.merge(from_source)
         
         # re-insert null fields that didn't get returned by ES
         query_body[:fields].each do |field|
