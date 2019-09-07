@@ -99,53 +99,30 @@ end
 # see comment in method body
 def get_search_args_from_params(params)
   options = {}
-  %w(metrics sort fields zip distance page per_page debug source_include).each do |opt|
+  %w(metrics sort fields zip distance page per_page debug).each do |opt|
     options[opt.to_sym] = params.delete("_#{opt}")
     # TODO: remove next line to end support for un-prefixed option parameters
     options[opt.to_sym] ||= params.delete(opt)
   end
+
   options[:endpoint] = params.delete("endpoint")     # these two (or three) params are
   options[:format]   = params.delete("format")       # supplied by Padrino;
   params.delete(:format) unless params[:format].nil? # format param duplicated if in url request
   
-  split_fields_params = (options[:fields] || '').split(',')
+  fields_split = (options[:fields] || '').split(',')
+  options[:fields]   = get_fields_selected_from_params(fields_split)
 
-  has_nested               = has_nested_field(split_fields_params)
-  options[:source_include] = has_nested ? get_sources_for_nested_doc(split_fields_params) : nil
-
-  options[:fields]   = get_fields_selected_from_params(split_fields_params)
   options[:command]  = params.delete("command")
 
   options[:metrics] = options[:metrics].split(/\s*,\s*/) if options[:metrics]
   options
 end
 
-def get_nested_types()
-  DataMagic.config.es_data_types["nested"]
-end
-
-def has_nested_field(split_fields_params)
-  if get_nested_types()
-    split_fields_params.any? { |field| get_nested_types().any? {|nested| nested.start_with? field }}
-  end
-end
-
-def get_sources_for_nested_doc(split_fields_params)
-  sources = []
-  nested_types = get_nested_types()
-
-  split_fields_params.each do |field_name|
-    # Select the nested_type that matches the param in fields
-    nested_match = nested_types.select {|key| key.start_with? field_name }
-    field_name_period = (field_name.end_with? '.') ? field_name : field_name + '.'
-    
-    matches = DataMagic.config.field_types.select { |key| key.start_with? field_name_period }
-    matches.each_key do |k|
-      sources.push(k)
-    end
-  end
-
-  sources
+def collectFieldsFromPrefix(field_name)
+  field_name_period = (field_name.end_with? '.') ? field_name : field_name + '.'
+  
+  # Expand 'complete' partial field name to full path(s) (`2014.academics` expands but `2014.acade` will not)
+  DataMagic.config.field_types.select { |key| key.start_with? field_name_period }
 end
 
 def get_fields_selected_from_params(split_fields_params)
@@ -154,13 +131,8 @@ def get_fields_selected_from_params(split_fields_params)
   split_fields_params.each do |field_name|
       if DataMagic.config.field_type(field_name)
         fields.push(field_name)
-      # Check if the field is a nested type - these should be listed under source => include, rather than under fields
-      elsif (get_nested_types() && get_nested_types().any? {|nested| nested.start_with? field_name })
-        next
       else
-        # Expand 'complete' partial field name to full path(s) (`2014.academics` expands but `2014.acade` will not)
-        field_name_period = (field_name.end_with? '.') ? field_name : field_name + '.'
-        matches = DataMagic.config.field_types.select { |key| key.start_with? field_name_period }
+        matches = collectFieldsFromPrefix(field_name)
         if matches.empty?
           # Let Error Checker catch this
           fields.push(field_name)

@@ -6,89 +6,69 @@ module DataMagic
         per_page = (options[:per_page] || config.page_size || DataMagic::DEFAULT_PAGE_SIZE).to_i
         page = options[:page].to_i || 0
         per_page = DataMagic::MAX_PAGE_SIZE if per_page > DataMagic::MAX_PAGE_SIZE
+
         query_hash = {
           from:   page * per_page,
           size:   per_page,
         }
 
-        squery = generate_squery(params, options, config)
+        # check options[:fields] - are any nested data type?
+        nested_fields = nested_fields(options[:fields])
+        query_fields  = options[:fields] - nested_fields
+
+        # check params keys - are any nested data type?
+        term_pairs = determine_query_term_datatypes(params)
+        nested_query_pairs = term_pairs[:nested_query_pairs]
+        query_pairs        = term_pairs[:query_pairs]
+
+        squery = generate_squery(query_pairs, options, config)
         query_hash[:query] = squery.request[:body][:query]
+
+        nested_query = Hash.new
+        if !nested_query_pairs.empty?
+          nested_query = build_nested_query(nested_query_pairs)
+        end
+
+        if !nested_query.empty?
+          query_hash[:query][:bool] = {}
+          query_hash[:query][:bool][:filter] = nested_query
+        end
+        
+        # TODO - I think the next few blocks of code might be relevant to solving the adjacent non-matching objects problem
+        if !query_fields.empty?
+          query_hash[:fields] = query_fields
+        end
+        # binding.pry
+
+        query_hash[:query].except!(:match_all) unless query_hash[:query][:bool].nil?
+
+
+
+        # incorporate nested inner_hit query with any existing queries
+        # if query_hash[:query][:bool]
+        #   if query_hash[:query][:bool][:filter]
+        #     query_hash[:query][:bool][:filter] += query_nested
+        #   else
+        #     query_hash[:query][:bool][:filter] = query_nested
+        #   end
+        #   if query_hash[:query][:bool][:must]
+        #     query_hash[:query][:bool][:must] += {terms: query_hash[:query][:terms]} unless query_hash[:query][:terms].nil?
+        #   else
+        #     query_hash[:query][:bool][:must] = {terms: query_hash[:query][:terms]} unless query_hash[:query][:terms].nil?
+        #   end
+        # end
+
+        query_hash[:query].except!( :terms)
+
 
         if options[:command] == 'stats'
           query_hash.merge! add_aggregations(params, options, config)
         end
 
-        # Source filter will contain fields that come from nested datatypes (not to be confused with nested fields, as a structure)
-        source_filter = options[:source_include] ? { include: options[:source_include] } : {}
-
-        if !source_filter.empty?
-          query_hash[:_source] = source_filter
-        elsif ( source_filter.empty? && options[:fields] && !options[:fields].empty? )
-          # if fields from a nested datatype don't exist, then source should be false
-          query_hash[:_source] = false
-        else
-          # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
-          query_hash[:_source] = { exclude: ["_*"] }
-        end
-        
-        
-        # TODO - I think the next few blocks of code might be relevant to solving the adjacent non-matching objects problem
-        # ALso, should conditional incorporate reference to :source_include??
-        # if options[:fields] && !options[:fields].empty? || options[:source_include] && !options[:source_include].empty?
-        if options[:fields] && !options[:fields].empty?
-          query_hash[:fields] = get_restrict_fields(options)
-
-          nested_set = Set[]
-
-          # determine if any fields are associated with a nested-query type
-          query_hash[:fields].each do |f|
-            key = f
-            first = ''
-            if config.dictionary[key].nil?
-              first, *keys = f.split('.')
-              key = keys.join('.')
-              first = first + '.'
-            end
-            config_field = config.dictionary[key]
-            field_map = config_field[:map.to_s]
-            if config.partial_doc_map[field_map]
-              path = first.to_s + config.partial_doc_map[field_map]['path']
-              nested_set.add(path)
-            end
-          end
-
-          # build nested path queries for the inner_hits
-          query_nested = nested_set.map do |path|
-            { nested: {
-                path: path,
-                query: {
-                    match_all: {}
-                },
-                inner_hits: {}
-              }
-            }
-          end
-
-          query_hash[:query].except!(:match_all) unless query_hash[:query][:bool].nil?
-
-          # incorporate nested inner_hit query with any existing queries
-          if query_hash[:query][:bool]
-            if query_hash[:query][:bool][:filter]
-              query_hash[:query][:bool][:filter] += query_nested
-            else
-              query_hash[:query][:bool][:filter] = query_nested
-            end
-            if query_hash[:query][:bool][:must]
-              query_hash[:query][:bool][:must] += {terms: query_hash[:query][:terms]} unless query_hash[:query][:terms].nil?
-            else
-              query_hash[:query][:bool][:must] = {terms: query_hash[:query][:terms]} unless query_hash[:query][:terms].nil?
-            end
-          end
-
-          query_hash[:query].except!( :terms)
-        end
+        query_hash = set_query_source(query_hash, nested_query, nested_fields, query_fields)
 
         query_hash[:sort] = get_sort_order(options[:sort], config) if options[:sort] && !options[:sort].empty?
+        # binding.pry
         query_hash
       end
 
@@ -112,6 +92,81 @@ module DataMagic
         end
 
         agg_hash.empty? ? {} : { aggs: agg_hash }
+      end
+
+      def nested_data_types()
+        DataMagic.config.es_data_types["nested"]
+      end
+
+      def field_type_nested?(field_name)
+        if nested_data_types()
+          nested_data_types().any? {|nested| field_name.start_with? nested }
+        end
+      end
+
+      def nested_fields(submitted_fields)
+        nested_fields = []
+        if !submitted_fields.empty?
+          submitted_fields.each do |field_name|
+            if field_type_nested?(field_name)
+              nested_fields.push(field_name)
+            end
+          end
+        end
+        nested_fields
+      end
+
+      def determine_query_term_datatypes(params)
+        nested_terms = params.keys.select { |key| field_type_nested?(key) }
+        nested_query_items = params.assoc(nested_terms.join(","))
+        nested_query_pairs = Hash[*nested_query_items]
+        query_pairs = nested_terms.empty? ? params : params.except!( nested_terms.join(","))
+
+        {
+          nested_query_pairs: nested_query_pairs,
+          query_pairs: query_pairs
+        }
+      end
+
+      def build_nested_query(nested_query_pairs)
+        # binding.pry
+        paths = Set[]
+        query_nested = Hash.new
+        
+        nested_query_pairs.keys.each do |key|
+          # Need to look up how adding to Sets works.... not sure if this will work with more than one pair
+          paths.add(nested_data_types.select {|nested| key.start_with? nested }.join(""))
+        end
+        # binding.pry
+        matches = Hash.new
+        if paths.length == 1
+          # If it is helpful to highlight fields, then 
+          # terms = nested_query_pairs.map { |term, _| { term => {}} }.first
+          matches = nested_query_pairs.map { |term, value| { match: { term => value }}}.first
+
+          query_nested = { 
+            nested: {
+                path: paths.to_a[0],
+                query: {
+                  bool: {
+                    must: {}
+                  }
+                },
+                inner_hits: {}
+                # If it is helpful to highlight fields, then the following 3 lines go inside the inner_hits hash
+                #   highlight: {
+                #     fields: {}
+                #   }
+              }
+            }
+
+            query_nested[:nested][:query][:bool][:must] = matches
+
+            # If it is helpful to highlight fields, then pass terms to hash defined below
+            # query_nested[:nested][:inner_hits][:highlight][:fields] = terms
+        end
+        # binding.pry
+        query_nested
       end
 
       def get_restrict_fields(options)
@@ -215,6 +270,32 @@ module DataMagic
         end
         squery
       end
+
+      def set_query_source(query_hash, nested_query, nested_fields, query_fields)
+        # binding.pry
+
+        # CASES
+        # - not a nested query, but the listed fields are nested datatypes - then set up a source filter
+        # - is a nested query and no fields specified
+        # - is a nested query and fields are specified >> the nested field types can't be retrieved via ES
+            # figure out how to select fields from inner hits during result processing
+        
+        # Source filter will contain fields that come from nested datatypes (not to be confused with nested fields, as a structure)
+        
+        # if there is a nested_query OR if there are query_fields AND no nested fields
+        if !nested_query.empty? || (!query_fields.empty? && nested_fields.empty?)
+          query_hash[:_source] = false
+        # if there NOT a nested_query AND there are nested fields, filter source on those fields
+        elsif nested_query.empty? && !nested_fields.empty?
+          query_hash[:_source] = nested_fields
+        else
+          # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
+          query_hash[:_source] = { exclude: ["_*"] }
+        end
+        # binding.pry
+        query_hash
+      end
+
     end
   end
 end

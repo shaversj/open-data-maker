@@ -101,9 +101,42 @@ module DataMagic
     hits = result["hits"]
     total = hits["total"]
     results = []
-    unless query_body.has_key? :fields
+    binding.pry
+
+    # Before processing result, check if the full_query includes a nested query
+    # Also, may need to allow for the key after query_body[:query][:bool] to be something other than [:filter]
+    nested_query_exists = false
+    nested_query_match_terms = []
+    query_nested = {}
+    binding.pry
+    # if !query_body[:query][:bool][:filter][:nested].empty?
+    if !query_body.dig(:query,:bool,:filter,:nested).nil?
+      query_nested = query_body[:query][:bool][:filter][:nested]
+      nested_query_exists = true
+      if !query_nested.dig(:query,:bool,:must,:match).nil?
+        nested_query_match_terms = query_nested[:query][:bool][:must][:match].keys
+      end
+    end
+
+    # 4 cases
+    # A is a nested query with query_body-fields
+    # B is a nested query AND NO  query_body-fields
+    # C is NOT nested query with query_body-fields
+    # D is NOT nested query AND NO query_body-fields
+
+    # What about fields under source include????
+
+    # Case B - nested query AND NO query_body-fields >> return inner_hits ?? 
+    if nested_query_exists && !query_body.keys.include?(:fields)
+      binding.pry
+      results = hits["hits"].map {|hit| hit["inner_hits"]}
+    # Case D - NOT a nested query AND NO query_body-fields >> return source ?? 
+    elsif !nested_query_exists && !query_body.keys.include?(:fields)
+      binding.pry
       # we're getting the whole document and we can find in _source
       results = hits["hits"].map {|hit| hit["_source"]}
+
+    # Cases A & C still need to be resolved in section below
     else
       # we're getting a subset of fields...
       results = hits["hits"].map do |hit|
@@ -114,8 +147,34 @@ module DataMagic
         inner = hit.fetch("inner_hits", {})
         delete_set = Set[]
 
+        # # capture inner hits from a query on a nested data type field
+        nested_query_hits = []
+        inner.keys.each do |inn_key|
+          # binding.pry
+          complete_inner_object = inner[inn_key]["hits"]["hits"]
+          complete_inner_object.each do |obj|
+            # each source_object has all fields that extend after the name of the nested data type
+            # for example, if inn_key is "latest.programs.aid.debt.cip_4_digit",
+            # keys in source_object are median_debt, cohort, title, ope_6_id
+            # the search rank for the inner object is at obj[_score] 
+            source_object = obj["_source"]
+            nested_query_hits.push(source_object)
+            # binding.pry
+          end
+        end
+        # ^^ the above loops capture the data objects I want, but I need to 
+        # get the object in the right format and be performant.
+
+        # work on incorporating with what Miles already wrote.
+
         inner.keys.each do |inn_key|
           leaf_set = Set[]
+          
+          # the following won't capture hits from a nested query because found is
+          # based on fields and I've removed nested fields from query_body fields
+          # look at the query body again - where are the match terms?
+          # binding.pry
+          
           found.keys.each do |key|
             if key.start_with? inn_key
               full = key.split('.')
@@ -125,16 +184,29 @@ module DataMagic
               delete_set.add(key)
             end
           end
-
-          leaf_items = inner[inn_key]['hits']['hits'].map do |h|
-            hash = NestedHash.new
-            leaf_set.each do |l|
-              val = h['_source'].dig(*(l.to_s.split('.')))
-              hash.dotkey_set(l, val)
-            end
-            hash
-          end
-          found[inn_key] = leaf_items
+          # binding.pry
+          # nested_query_hits2 =[]
+          # complete_inner_object = inner[inn_key]["hits"]["hits"]
+          # complete_inner_object.each do |obj|
+          #   # binding.pry
+          #   # each source_object has all fields that extend after the name of the nested data type
+          #   # for example, if inn_key is "latest.programs.aid.debt.cip_4_digit",
+          #   # keys in source_object are median_debt, cohort, title, ope_6_id
+          #   # the search rank for the inner object is at obj[_score] 
+          #   found[inn_key].push(obj["_source"])
+          # end
+          # binding.pry
+          # leaf_items = inner[inn_key]['hits']['hits'].map do |h|
+          #   hash = NestedHash.new
+          #   # binding.pry
+          #   leaf_set.each do |l|
+          #     # binding.pry
+          #     val = h['_source'].dig(*(l.to_s.split('.')))
+          #     hash.dotkey_set(l, val)
+          #   end
+          #   hash
+          # end
+          # found[inn_key] = leaf_items
         end
 
         delete_set.each { |k| found.delete k }
@@ -148,6 +220,7 @@ module DataMagic
         found = found.merge(from_source)
         
         # re-insert null fields that didn't get returned by ES
+        # binding.pry
         query_body[:fields].each do |field|
           if !found.has_key?(field) && !delete_set.include?(field)
             found[field] = nil
@@ -157,6 +230,9 @@ module DataMagic
         # The following converts dotted-keys to nested json; 
         # NestedHash.new(found)
         # Leave as `found` for dotted keys
+
+        # whatever is on this last line gets passed back to 'results' because we're inside of a map loop
+        # the map loop is iterating through >> hits["hits"]
         found
       end
     end
