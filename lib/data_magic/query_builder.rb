@@ -13,8 +13,9 @@ module DataMagic
         }
 
         # check options[:fields] - are any nested data type?
-        nested_fields = nested_fields(options[:fields])
-        query_fields  = options[:fields] - nested_fields
+
+        nested_fields = !options[:fields].nil? ? nested_fields(options[:fields]) : []
+        query_fields  = !options[:fields].nil? ? options[:fields] - nested_fields : []
 
         # check params keys - are any nested data type?
         term_pairs = determine_query_term_datatypes(params)
@@ -38,7 +39,6 @@ module DataMagic
         if !query_fields.empty?
           query_hash[:fields] = query_fields
         end
-        # binding.pry
 
         query_hash[:query].except!(:match_all) unless query_hash[:query][:bool].nil?
 
@@ -58,7 +58,13 @@ module DataMagic
         #   end
         # end
 
-        query_hash[:query].except!( :terms)
+        # TODO - Determine if/when the following is relevant.
+        # See ./spec/lib/data_magic/query_builder_spec.rb:28
+        # A test with terms in it was breaking so I was going to wrap a conditional
+        # However, simply commenting out the whole line fixed the test
+        # if query_hash[:query][:bool]
+        #   query_hash[:query].except!( :terms)
+        # end
 
 
         if options[:command] == 'stats'
@@ -68,7 +74,6 @@ module DataMagic
         query_hash = set_query_source(query_hash, nested_query, nested_fields, query_fields)
 
         query_hash[:sort] = get_sort_order(options[:sort], config) if options[:sort] && !options[:sort].empty?
-        # binding.pry
         query_hash
       end
 
@@ -129,7 +134,6 @@ module DataMagic
       end
 
       def build_nested_query(nested_query_pairs)
-        # binding.pry
         paths = Set[]
         query_nested = Hash.new
         
@@ -137,7 +141,6 @@ module DataMagic
           # Need to look up how adding to Sets works.... not sure if this will work with more than one pair
           paths.add(nested_data_types.select {|nested| key.start_with? nested }.join(""))
         end
-        # binding.pry
         matches = Hash.new
         if paths.length == 1
           # If it is helpful to highlight fields, then 
@@ -272,8 +275,6 @@ module DataMagic
       end
 
       def set_query_source(query_hash, nested_query, nested_fields, query_fields)
-        # binding.pry
-
         # CASES
         # - not a nested query, but the listed fields are nested datatypes - then set up a source filter
         # - is a nested query and no fields specified
@@ -292,7 +293,7 @@ module DataMagic
           # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
           query_hash[:_source] = { exclude: ["_*"] }
         end
-        # binding.pry
+        
         query_hash
       end
 
