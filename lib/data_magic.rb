@@ -140,23 +140,29 @@ module DataMagic
         array_of_objects.map do |item|
           inner_hit_simple  = item.fetch("_source", {})
           parent_keys_split = parent_keys.split('.')
-
-          NestedHash.new.hasherizer( parent_keys_split, inner_hit_simple )
+          if options[:keys_nested]
+            hash = NestedHash.new.hasherizer( parent_keys_split, inner_hit_simple )
+          else
+            { parent_keys => inner_hit_simple }
+          end
         end
       end
     # Case D - NOT a nested query AND NO query_body-fields >> return source ?? 
     elsif !nested_query_exists && !query_body.keys.include?(:fields)
       # we're getting the whole document and we can find in _source
       results = hits["hits"].map {|hit| hit["_source"]}
-
+      # TODO- implement nested vs dotted option
     # Cases B & C still need to be resolved in section below
     else
       # we're getting a subset of fields...
       results = hits["hits"].map do |hit|
         found = hit.fetch("fields", {})
-        # fields requested from a from_nested_data_type are defined under _source
-        # unless a query term is also a nested data type, in this case, see inner hits
+
+        # Unless a query term is also a nested data type, fields requested for a nested_data_type are defined under _source
         from_source = hit.fetch("_source", {})
+        dotted_from_source = NestedHash.new.withdotkeys(from_source)
+        found = found.merge(dotted_from_source)
+
         inner = hit.fetch("inner_hits", {})
         delete_set = Set[]
 
@@ -176,7 +182,6 @@ module DataMagic
 
         inner.keys.each do |inn_key|
           leaf_set = Set[]
-          
           # the following won't capture hits from a nested query because found is
           # based on fields and I've removed nested fields from query_body fields
           # look at the query body again - where are the match terms?
@@ -208,9 +213,6 @@ module DataMagic
         # now it should look like this:
         # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace, "children" => [{...}, {...}, {...}]}
         
-        # Combine nested fields from source and fields after found is processed
-        found = found.merge(from_source)
-        
         # re-insert null fields that didn't get returned by ES
         query_body[:fields].each do |field|
           if !(found.has_key?(field) || found.has_key?(field.to_s)) && !delete_set.include?(field || field.to_s)
@@ -218,12 +220,8 @@ module DataMagic
           end
         end
 
-        # The following converts dotted-keys to nested json; 
-        # NestedHash.new(found)
-        # Leave as `found` for dotted keys
+        found = options[:keys_nested] ? NestedHash.new(found) : found
 
-        # whatever is on this last line gets passed back to 'results' because we're inside of a map loop
-        # the map loop is iterating through >> hits["hits"]
         found
       end
     end
