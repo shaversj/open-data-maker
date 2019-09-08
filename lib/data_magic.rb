@@ -168,47 +168,32 @@ module DataMagic
         inner = hit.fetch("inner_hits", {})
         delete_set = Set[]
         
-        # Collect inner hits for match term is a nested datatype
-        parent_key = inner.keys[0]
+        # The following may pertain to a non-nested match query
+        # inner.keys.each do |inn_key|
+        #   leaf_set = Set[]
+        #   # the following won't capture hits from a nested query because found is
+        #   # based on fields and I've removed nested fields from query_body fields
+        #   # look at the query body again - where are the match terms?
+        #   found.keys.each do |key|
+        #     if key.start_with? inn_key
+        #       full = key.split('.')
+        #       base = inn_key.split('.')
+        #       leafs = full - base
+        #       leaf_set.add(leafs.join('.'))
+        #       delete_set.add(key)
+        #     end
+        #   end
 
-        nested_details = []
-        if !inner.empty?
-          nested_details = inner[parent_key]["hits"]["hits"].map do |nested_obj|
-            details = nested_obj.fetch("_source", {})
-            n_hash = NestedHash.new
-            
-            details.keys.each do |key|
-              n_hash[key] = details[key]
-            end
-            n_hash.withdotkeys
-          end
-        end
-
-        inner.keys.each do |inn_key|
-          leaf_set = Set[]
-          # the following won't capture hits from a nested query because found is
-          # based on fields and I've removed nested fields from query_body fields
-          # look at the query body again - where are the match terms?
-          found.keys.each do |key|
-            if key.start_with? inn_key
-              full = key.split('.')
-              base = inn_key.split('.')
-              leafs = full - base
-              leaf_set.add(leafs.join('.'))
-              delete_set.add(key)
-            end
-          end
-
-          leaf_items = inner[inn_key]['hits']['hits'].map do |h|
-            hash = NestedHash.new
-            leaf_set.each do |l|
-              val = h['_source'].dig(*(l.to_s.split('.')))
-              hash.dotkey_set(l, val)
-            end
-            hash
-          end
-          found[inn_key] = leaf_items
-        end
+        #   leaf_items = inner[inn_key]['hits']['hits'].map do |h|
+        #     hash = NestedHash.new
+        #     leaf_set.each do |l|
+        #       val = h['_source'].dig(*(l.to_s.split('.')))
+        #       hash.dotkey_set(l, val)
+        #     end
+        #     hash
+        #   end
+        #   found[inn_key] = leaf_items
+        # end
 
         delete_set.each { |k| found.delete k }
         # each result looks like this:
@@ -224,10 +209,29 @@ module DataMagic
           end
         end
 
-        found.except!(parent_key)
-        if !nested_details.empty?
-          found[parent_key] = (nested_details)
+        # Collect inner hits for when match term is a nested datatype
+        nested_details_hash = {}
+        # binding.pry
+        if !inner.empty?
+          inner.keys.each do |inn_key|
+            inner_details = inner[inn_key]["hits"]["hits"].map do |nested_obj|
+              details = nested_obj.fetch("_source", {})
+              n_hash = NestedHash.new
+              
+              details.keys.each do |key|
+                n_hash[key] = details[key]
+              end
+              n_hash.withdotkeys
+            end
+
+            nested_details_hash[inn_key] = inner_details
+          end
         end
+        
+        if !nested_details_hash.empty?
+          found = found.merge(nested_details_hash)
+        end
+        # binding.pry
 
         found = options[:keys_nested] ? NestedHash.new(found) : found
 
