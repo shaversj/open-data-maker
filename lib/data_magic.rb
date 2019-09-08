@@ -80,6 +80,9 @@ module DataMagic
     return { errors: errors } if errors.length > 0
 
     query_body = QueryBuilder.from_params(terms, options, config)
+    result_processing_info = query_body[:post_es_response]
+    query_body.delete(:post_es_response)
+
     index_name = index_name_from_options(options)
     logger.info "search terms:#{terms.inspect}"
 
@@ -108,10 +111,12 @@ module DataMagic
     results = []
 
     # Before processing result, check if the full_query includes a nested query
-    # TODO - These next 2 lines may be slowing things down, try to set accessible vars in QueryBody, 
-    # so that deep processing doesn't have to happen here 
-    nested_query_exists = !query_body.dig_and_collect(:query,:bool,:filter,:nested).empty?
-    two_path_nested_query_exists = !query_body.dig_and_collect(:query,:bool,:filter,:query,:bool,:must).empty?
+    includes_nested_query = false
+    nested_query_type = ""
+    if result_processing_info[:nested_type].is_a?(String)
+      includes_nested_query = true
+      nested_query_type = result_processing_info[:nested_type]
+    end
 
     # 5 cases so far....
     # A is a nested query AND NO  query_body-fields
@@ -122,7 +127,7 @@ module DataMagic
 
     # Case A - nested query AND NO query_body-fields >> return inner_hits ?? 
     # TODO - Discuss with Patrick - what structure do we want when a single schools returns multiple programs?
-    if nested_query_exists && !query_body.keys.include?(:fields)
+    if includes_nested_query && nested_query_type == "single_path" && !query_body.keys.include?(:fields)
       inner_hits_complete = hits["hits"].map { |hit| hit["inner_hits"] }
       results = inner_hits_complete.map do |inn|
         parent_keys = inn.keys[0]
@@ -139,12 +144,12 @@ module DataMagic
         end
       end
     # Case E - nested query matching on 2 different datatypes
-    elsif two_path_nested_query_exists && !query_body.keys.include?(:fields)
+    elsif includes_nested_query && nested_query_type == "multi_path" && !query_body.keys.include?(:fields)
       # TODO - Find out if this condition even matters
       results = hits["hits"].map { |hit| hit["inner_hits"] }
 
     # Case D - NOT a nested query AND NO query_body-fields >> return source ?? 
-    elsif !nested_query_exists && !query_body.keys.include?(:fields)
+    elsif !includes_nested_query && !query_body.keys.include?(:fields)
       # we're getting the whole document and we can find in _source
       results = hits["hits"].map {|hit| hit["_source"]}
       # TODO- implement nested vs dotted option
