@@ -174,7 +174,7 @@ module DataMagic
           
           query_hash_with_nested_query[:query][:bool][:must].push(nested)
         end
-        
+
         query_pairs.each do |key,value|
           query_hash_with_nested_query[:query][:bool][:must].push({ match: { key => value }})
         end
@@ -311,15 +311,19 @@ module DataMagic
         
         # Source filter will contain fields that come from nested datatypes (not to be confused with nested fields, as a structure)
         # if there is a nested_query AND if there are query_fields AND no nested fields
-        # TODO - Focus on whether these conditions are 100% accurate
         if nested_query || (!query_fields.empty? && nested_fields.empty?)
           query_hash[:_source] = false
-        # if there NOT a nested_query AND there are nested fields, filter source on those fields
+        # if this is NOT a nested_query AND there are nested fields, then filter source on those fields
         elsif !nested_query && !nested_fields.empty?
-          query_hash[:_source] = nested_fields
+            query_hash[:_source] = nested_fields
+        # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
         else
-          # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
           query_hash[:_source] = { exclude: ["_*"] }
+        end
+
+        # if this is a nested_query AND there are nested fields, then those fields should be passed to post_es_response key, rather than :_source
+        if nested_query && !nested_fields.empty?
+          query_hash[:post_es_response][:nested_fields_filter] = nested_fields
         end
 
         query_hash

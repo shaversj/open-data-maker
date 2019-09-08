@@ -85,7 +85,7 @@ module DataMagic
 
     index_name = index_name_from_options(options)
     logger.info "search terms:#{terms.inspect}"
-    
+
     full_query = {
       index: index_name,
       type: 'document',
@@ -117,6 +117,8 @@ module DataMagic
       includes_nested_query = true
       nested_query_type = result_processing_info[:nested_type]
     end
+
+    nested_fields_filter = result_processing_info[:nested_fields_filter]
 
     # 5 cases so far....
     # A is a nested query AND NO  query_body-fields
@@ -193,7 +195,13 @@ module DataMagic
               details.keys.each do |key|
                 n_hash[key] = details[key]
               end
-              n_hash.withdotkeys
+              n_hash = n_hash.withdotkeys
+              keys_to_keep = nested_fields_filter.select { |f| f.start_with? inn_key }.map do |n|
+                n.gsub(inn_key + ".","")
+              end
+              n_hash_filtered = n_hash.select { |k| keys_to_keep.include?(k) }
+
+              n_hash_filtered
             end
 
             nested_details_hash[inn_key] = inner_details
