@@ -108,17 +108,17 @@ module DataMagic
     results = []
 
     # Before processing result, check if the full_query includes a nested query
-    # Also, may need to allow for the key after query_body[:query][:bool] to be something other than [:filter]
+    # TODO - These next 2 lines may be slowing things down, try to set accessible vars in QueryBody, 
+    # so that deep processing doesn't have to happen here 
     nested_query_exists = !query_body.dig_and_collect(:query,:bool,:filter,:nested).empty?
     two_path_nested_query_exists = !query_body.dig_and_collect(:query,:bool,:filter,:query,:bool,:must).empty?
-    # 4 cases
+
+    # 5 cases so far....
     # A is a nested query AND NO  query_body-fields
     # B is a nested query with query_body-fields
     # C is NOT nested query with query_body-fields
     # D is NOT nested query AND NO query_body-fields
     # E nested query includes match terms from 2 different nested data-types
-
-    # What about fields under source include????
 
     # Case A - nested query AND NO query_body-fields >> return inner_hits ?? 
     # TODO - Discuss with Patrick - what structure do we want when a single schools returns multiple programs?
@@ -137,7 +137,6 @@ module DataMagic
             { parent_keys => inner_hit_simple }
           end
         end
-        binding.pry
       end
     # Case E - nested query matching on 2 different datatypes
     elsif two_path_nested_query_exists && !query_body.keys.include?(:fields)
@@ -149,31 +148,34 @@ module DataMagic
       # we're getting the whole document and we can find in _source
       results = hits["hits"].map {|hit| hit["_source"]}
       # TODO- implement nested vs dotted option
+    
     # Cases B & C still need to be resolved in section below
     else
       # we're getting a subset of fields...
       results = hits["hits"].map do |hit|
         found = hit.fetch("fields", {})
-
         # Unless a query term is also a nested data type, fields requested for a nested_data_type are defined under _source
         from_source = hit.fetch("_source", {})
         dotted_from_source = NestedHash.new.withdotkeys(from_source)
         found = found.merge(dotted_from_source)
 
+        # When an inner query is submitted, the nested data_type fields are under inner_hits
         inner = hit.fetch("inner_hits", {})
         delete_set = Set[]
+        
+        # Collect inner hits for match term is a nested datatype
+        parent_key = inner.keys[0]
 
-        # # capture inner hits from a query on a nested data type field
-        nested_query_hits = []
-        inner.keys.each do |inn_key|
-          complete_inner_object = inner[inn_key]["hits"]["hits"]
-          complete_inner_object.each do |obj|
-            # each source_object has all fields that extend after the name of the nested data type
-            # for example, if inn_key is "latest.programs.aid.debt.cip_4_digit",
-            # keys in source_object are median_debt, cohort, title, ope_6_id
-            # the search rank for the inner object is at obj[_score] 
-            source_object = obj["_source"]
-            nested_query_hits.push(source_object)
+        nested_details = []
+        if !inner.empty?
+          nested_details = inner[parent_key]["hits"]["hits"].map do |nested_obj|
+            details = nested_obj.fetch("_source", {})
+            n_hash = NestedHash.new
+            
+            details.keys.each do |key|
+              n_hash[key] = details[key]
+            end
+            n_hash.withdotkeys
           end
         end
 
@@ -202,7 +204,7 @@ module DataMagic
           end
           found[inn_key] = leaf_items
         end
-        
+
         delete_set.each { |k| found.delete k }
         # each result looks like this:
         # {"city"=>["Springfield"], "address"=>["742 Evergreen Terrace"], "children" => [{...}, {...}, {...}] }
@@ -217,12 +219,17 @@ module DataMagic
           end
         end
 
+        found.except!(parent_key)
+        if !nested_details.empty?
+          found[parent_key] = (nested_details)
+        end
+
         found = options[:keys_nested] ? NestedHash.new(found) : found
 
         found
       end
     end
-  
+
     metadata = {
       "total" => total,
       "page" => query_body[:from] / query_body[:size],

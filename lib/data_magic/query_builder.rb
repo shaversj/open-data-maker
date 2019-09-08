@@ -1,6 +1,8 @@
 module DataMagic
   module QueryBuilder
     class << self
+      # @@nested_query_type = ""
+
       # Creates query from parameters passed into endpoint
       def from_params(params, options, config)
         per_page = (options[:per_page] || config.page_size || DataMagic::DEFAULT_PAGE_SIZE).to_i
@@ -23,11 +25,14 @@ module DataMagic
 
         squery = generate_squery(query_pairs, options, config)
         query_hash[:query] = squery.request[:body][:query]
-        
+
         nested_query = !nested_query_pairs.empty? ? build_nested_query(nested_query_pairs) : {}
         if !nested_query.empty?
           query_hash[:query][:bool] = {}
+          # TODO - check it these same hashes are required when double path nested query
+          # TODO - find more efficient way to pass query type info to data_magic
           query_hash[:query][:bool][:filter] = nested_query
+          # query_hash[:is_nested] = true
         end
         
         if !query_fields.empty?
@@ -52,7 +57,15 @@ module DataMagic
         query_hash
       end
 
+      # def get_nested_query_type
+      #   @@nested_query_type
+      # end
+
       private
+
+      def set_nested_query_type(query_type)
+        @@nested_query_type = query_type
+      end
 
       def generate_squery(params, options, config)
         squery = Stretchy.query(type: 'document')
@@ -140,11 +153,13 @@ module DataMagic
         query_nested = Hash.new
         
         if paths.length == 1
+          set_nested_query_type("nested_single_path")
           path    = paths.to_a[0]
           matches = paths_and_matches.map { |item| item[:match] }
           
           query_nested = get_inner_nested_query(path, matches)
         else
+          set_nested_query_type("multi_path")
           inner_queries = paths.to_a.map do |path|
             matches = paths_and_matches.select { |h| path == h[:path] }.map { |h| h[:match] }
             get_inner_nested_query( path, matches )
@@ -289,8 +304,8 @@ module DataMagic
             # figure out how to select fields from inner hits during result processing
         
         # Source filter will contain fields that come from nested datatypes (not to be confused with nested fields, as a structure)
-        
-        # if there is a nested_query OR if there are query_fields AND no nested fields
+        # if there is a nested_query AND if there are query_fields AND no nested fields
+        # TODO - Focus on whether these conditions are 100% accurate
         if !nested_query.empty? || (!query_fields.empty? && nested_fields.empty?)
           query_hash[:_source] = false
         # if there NOT a nested_query AND there are nested fields, filter source on those fields
