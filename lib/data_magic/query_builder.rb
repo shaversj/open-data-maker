@@ -23,12 +23,8 @@ module DataMagic
 
         squery = generate_squery(query_pairs, options, config)
         query_hash[:query] = squery.request[:body][:query]
-
-        nested_query = Hash.new
-        if !nested_query_pairs.empty?
-          nested_query = build_nested_query(nested_query_pairs)
-        end
-
+        
+        nested_query = !nested_query_pairs.empty? ? build_nested_query(nested_query_pairs) : {}
         if !nested_query.empty?
           query_hash[:query][:bool] = {}
           query_hash[:query][:bool][:filter] = nested_query
@@ -40,30 +36,10 @@ module DataMagic
 
         query_hash[:query].except!(:match_all) unless query_hash[:query][:bool].nil?
 
-
-
-        # incorporate nested inner_hit query with any existing queries
-        # if query_hash[:query][:bool]
-        #   if query_hash[:query][:bool][:filter]
-        #     query_hash[:query][:bool][:filter] += query_nested
-        #   else
-        #     query_hash[:query][:bool][:filter] = query_nested
-        #   end
-        #   if query_hash[:query][:bool][:must]
-        #     query_hash[:query][:bool][:must] += {terms: query_hash[:query][:terms]} unless query_hash[:query][:terms].nil?
-        #   else
-        #     query_hash[:query][:bool][:must] = {terms: query_hash[:query][:terms]} unless query_hash[:query][:terms].nil?
-        #   end
-        # end
-
-        # TODO - Determine if/when the following is relevant.
-        # See ./spec/lib/data_magic/query_builder_spec.rb:28
-        # A test with terms in it was breaking so I was going to wrap a conditional
-        # However, simply commenting out the whole line fixed the test
-        # if query_hash[:query][:bool]
-        #   query_hash[:query].except!( :terms)
-        # end
-
+        # TODO - Revisit ./spec/lib/data_magic/query_builder_spec.rb:28
+        # That test broke, when the following line was no longer wrapped in a condtional, if query_hash[:query][:bool]
+        # When I commented out the line, nothing broke.. not sure if it is relevant.
+        # query_hash[:query].except!( :terms)
 
         if options[:command] == 'stats'
           query_hash.merge! add_aggregations(params, options, config)
@@ -140,44 +116,67 @@ module DataMagic
         }
       end
 
+      def sort_nested_query_paths_and_matches(nested_query_pairs)
+        paths_and_matches = []
+        nested_query_pairs.each do |key, value|
+          if nested_data_types.any? {|nested| key.start_with? nested }
+            path = nested_data_types.select {|nested| key.start_with? nested }.join("")
+          end
+
+          paths_and_matches.push({
+            path: path,
+            match: { match: { key => value }}
+          })
+        end
+        paths_and_matches
+      end
+
       def build_nested_query(nested_query_pairs)
+        paths_and_matches = sort_nested_query_paths_and_matches(nested_query_pairs)
+
         paths = Set[]
+        paths_and_matches.each { |hash| paths.add(hash[:path]) }
+
         query_nested = Hash.new
         
-        nested_query_pairs.keys.each do |key|
-          # Need to look up how adding to Sets works.... not sure if this will work with more than one pair
-          paths.add(nested_data_types.select {|nested| key.start_with? nested }.join(""))
-        end
-
         if paths.length == 1
-          # If it is helpful to highlight fields, then 
-          # terms = nested_query_pairs.map { |term, _| { term => {}} }.first
-          matches = nested_query_pairs.map { |term, value| { match: { term => value }}}
-
-          query_nested = { 
-            nested: {
-              path: paths.to_a[0],
-              query: {
-                bool: {
-                  must: {}
-                }
-              },
-              inner_hits: {}
-              # If it is helpful to highlight fields, then the following 3 lines go inside the inner_hits hash
-              #   highlight: {
-              #     fields: {}
-              #   }
-            }
-          }
-
-            query_nested[:nested][:query][:bool][:must] = matches
-
-
-            # If it is helpful to highlight fields, then pass terms to hash defined below
-            # query_nested[:nested][:inner_hits][:highlight][:fields] = terms
+          path    = paths.to_a[0]
+          matches = paths_and_matches.map { |item| item[:match] }
+          
+          query_nested = get_inner_nested_query(path, matches)
+        else
+          inner_queries = paths.to_a.map do |path|
+            matches = paths_and_matches.select { |h| path == h[:path] }.map { |h| h[:match] }
+            get_inner_nested_query( path, matches )
+          end
+          query_nested = get_outer_nested_query(inner_queries)
         end
 
         query_nested
+      end
+
+      def get_outer_nested_query(inner_queries)
+        {
+          query: {
+            bool: {
+              must: inner_queries
+            }
+          }
+        }
+      end
+
+      def get_inner_nested_query(path, matches)
+        { 
+          nested: {
+            path: path,
+            query: {
+              bool: {
+                must: matches
+              }
+            },
+            inner_hits: {}
+          }
+        }
       end
 
       def get_restrict_fields(options)

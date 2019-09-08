@@ -110,12 +110,13 @@ module DataMagic
     # Before processing result, check if the full_query includes a nested query
     # Also, may need to allow for the key after query_body[:query][:bool] to be something other than [:filter]
     nested_query_exists = !query_body.dig_and_collect(:query,:bool,:filter,:nested).empty?
-
+    two_path_nested_query_exists = !query_body.dig_and_collect(:query,:bool,:filter,:query,:bool,:must).empty?
     # 4 cases
     # A is a nested query AND NO  query_body-fields
     # B is a nested query with query_body-fields
     # C is NOT nested query with query_body-fields
     # D is NOT nested query AND NO query_body-fields
+    # E nested query includes match terms from 2 different nested data-types
 
     # What about fields under source include????
 
@@ -136,7 +137,13 @@ module DataMagic
             { parent_keys => inner_hit_simple }
           end
         end
+        binding.pry
       end
+    # Case E - nested query matching on 2 different datatypes
+    elsif two_path_nested_query_exists && !query_body.keys.include?(:fields)
+      # TODO - Find out if this condition even matters
+      results = hits["hits"].map { |hit| hit["inner_hits"] }
+
     # Case D - NOT a nested query AND NO query_body-fields >> return source ?? 
     elsif !nested_query_exists && !query_body.keys.include?(:fields)
       # we're getting the whole document and we can find in _source
