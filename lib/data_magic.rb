@@ -109,17 +109,7 @@ module DataMagic
 
     # Before processing result, check if the full_query includes a nested query
     # Also, may need to allow for the key after query_body[:query][:bool] to be something other than [:filter]
-    nested_query_exists = false
-    nested_query_match_terms = []
-    query_nested = {}
-
-    if !query_body.dig_and_collect(:query,:bool,:filter,:nested).empty?
-      query_nested = query_body[:query][:bool][:filter][:nested]
-      nested_query_exists = true
-      if !query_nested.dig_and_collect(:query,:bool,:must,:match).empty?
-        nested_query_match_terms = query_nested[:query][:bool][:must][:match].keys
-      end
-    end
+    nested_query_exists = !query_body.dig_and_collect(:query,:bool,:filter,:nested).empty?
 
     # 4 cases
     # A is a nested query AND NO  query_body-fields

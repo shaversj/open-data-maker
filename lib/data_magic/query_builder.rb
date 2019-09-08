@@ -13,7 +13,6 @@ module DataMagic
         }
 
         # check options[:fields] - are any nested data type?
-
         nested_fields = !options[:fields].nil? ? nested_fields(options[:fields]) : []
         query_fields  = !options[:fields].nil? ? options[:fields] - nested_fields : []
 
@@ -35,7 +34,6 @@ module DataMagic
           query_hash[:query][:bool][:filter] = nested_query
         end
         
-        # TODO - I think the next few blocks of code might be relevant to solving the adjacent non-matching objects problem
         if !query_fields.empty?
           query_hash[:fields] = query_fields
         end
@@ -74,6 +72,7 @@ module DataMagic
         query_hash = set_query_source(query_hash, nested_query, nested_fields, query_fields)
 
         query_hash[:sort] = get_sort_order(options[:sort], config) if options[:sort] && !options[:sort].empty?
+
         query_hash
       end
 
@@ -123,13 +122,21 @@ module DataMagic
 
       def determine_query_term_datatypes(params)
         nested_terms = params.keys.select { |key| field_type_nested?(key) }
-        nested_query_items = params.assoc(nested_terms.join(","))
-        nested_query_pairs = Hash[*nested_query_items]
-        query_pairs = nested_terms.empty? ? params : params.except!( nested_terms.join(","))
+        
+        nested_query_pairs = {}
+        nested_terms.each { |key| nested_query_pairs[key] = params[key] }
+
+        if !nested_terms.empty?
+          nested_terms.each do |key|
+            params.except!( key )
+          end
+        end
+
+        query_pairs = params
 
         {
           nested_query_pairs: nested_query_pairs,
-          query_pairs: query_pairs
+          query_pairs:        query_pairs
         }
       end
 
@@ -141,34 +148,35 @@ module DataMagic
           # Need to look up how adding to Sets works.... not sure if this will work with more than one pair
           paths.add(nested_data_types.select {|nested| key.start_with? nested }.join(""))
         end
-        matches = Hash.new
+
         if paths.length == 1
           # If it is helpful to highlight fields, then 
           # terms = nested_query_pairs.map { |term, _| { term => {}} }.first
-          matches = nested_query_pairs.map { |term, value| { match: { term => value }}}.first
+          matches = nested_query_pairs.map { |term, value| { match: { term => value }}}
 
           query_nested = { 
             nested: {
-                path: paths.to_a[0],
-                query: {
-                  bool: {
-                    must: {}
-                  }
-                },
-                inner_hits: {}
-                # If it is helpful to highlight fields, then the following 3 lines go inside the inner_hits hash
-                #   highlight: {
-                #     fields: {}
-                #   }
-              }
+              path: paths.to_a[0],
+              query: {
+                bool: {
+                  must: {}
+                }
+              },
+              inner_hits: {}
+              # If it is helpful to highlight fields, then the following 3 lines go inside the inner_hits hash
+              #   highlight: {
+              #     fields: {}
+              #   }
             }
+          }
 
             query_nested[:nested][:query][:bool][:must] = matches
+
 
             # If it is helpful to highlight fields, then pass terms to hash defined below
             # query_nested[:nested][:inner_hits][:highlight][:fields] = terms
         end
-        # binding.pry
+
         query_nested
       end
 
@@ -293,7 +301,7 @@ module DataMagic
           # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
           query_hash[:_source] = { exclude: ["_*"] }
         end
-        
+
         query_hash
       end
 
