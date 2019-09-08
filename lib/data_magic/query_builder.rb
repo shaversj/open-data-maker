@@ -27,8 +27,11 @@ module DataMagic
         query_hash[:query] = squery.request[:body][:query]
 
         nested_query = false
-        if !nested_query_pairs.empty?
+        if !nested_query_pairs.empty? && query_pairs.empty?
           build_nested_query(nested_query_pairs, query_hash)
+          nested_query = true
+        elsif !query_pairs.empty? && !nested_query_pairs.empty?
+          build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_pairs, query_hash)
           nested_query = true
         end
         
@@ -134,6 +137,7 @@ module DataMagic
       end
 
       def build_nested_query(nested_query_pairs, query_hash)
+        # TODO - figure out when to be using filter vs must...
         paths_and_matches = sort_nested_query_paths_and_matches(nested_query_pairs)
 
         paths = Set[]
@@ -145,7 +149,6 @@ module DataMagic
           query_hash[:post_es_response][:nested_type] = "single_path"
           path    = paths.to_a[0]
           matches = paths_and_matches.map { |item| item[:match] }
-          # TODO - need to figure out how to combine with a non-nested query - don't overwrite an existing match k,v pair
           query_hash[:query][:bool] = {}
           query_hash[:query][:bool][:filter] = get_inner_nested_query(path, matches)
         else
@@ -158,6 +161,25 @@ module DataMagic
         end
 
         query_hash
+      end
+
+      def build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_pairs, query_hash)
+        query_hash_with_nested_query = build_nested_query(nested_query_pairs, query_hash)
+        query_hash_with_nested_query[:query].delete(:match)
+
+        if !query_hash_with_nested_query.dig(:query,:bool,:must).is_a?(Array)
+          nested = query_hash_with_nested_query.dig(:query,:bool,:filter)
+          query_hash_with_nested_query[:query][:bool].delete(:filter)
+          query_hash_with_nested_query[:query][:bool][:must] = []
+          
+          query_hash_with_nested_query[:query][:bool][:must].push(nested)
+        end
+        
+        query_pairs.each do |key,value|
+          query_hash_with_nested_query[:query][:bool][:must].push({ match: { key => value }})
+        end
+
+        query_hash_with_nested_query
       end
 
       def get_outer_nested_query(inner_queries)
