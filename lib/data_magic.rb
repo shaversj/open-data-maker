@@ -106,6 +106,7 @@ module DataMagic
     search_time = Time.now.to_f - time_start
     logger.info "ES query time (ms): #{result["took"]} ; Query fetch time (s): #{search_time} ; result: #{result.inspect[0..500]}"
 
+    # Everything after this is aimed at processing the results from ES for the browser 
     hits = result["hits"]
     total = hits["total"]
     results = []
@@ -117,50 +118,22 @@ module DataMagic
       includes_nested_query = true
       nested_query_type = result_processing_info[:nested_type]
     end
+    
+    # Collect list of nested fields that need to be filtered
+    # This is neccessary because the standard ES fields filter creates arrays from nested data, which we don't want
+    nested_fields_filter = result_processing_info[:nested_fields_filter] ? result_processing_info[:nested_fields_filter] : []
 
-    nested_fields_filter = result_processing_info[:nested_fields_filter]
-
-    # 5 cases so far....
-    # A is a nested query AND NO  query_body-fields
-    # B is a nested query with query_body-fields
-    # C is NOT nested query with query_body-fields
-    # D is NOT nested query AND NO query_body-fields
-    # E nested query includes match terms from 2 different nested data-types
-
-    # Case A - nested query AND NO query_body-fields >> return inner_hits ?? 
-    # TODO - Discuss with Patrick - what structure do we want when a single schools returns multiple programs?
-    if includes_nested_query && nested_query_type == "single_path" && !query_body.keys.include?(:fields)
-      inner_hits_complete = hits["hits"].map { |hit| hit["inner_hits"] }
-      results = inner_hits_complete.map do |inn|
-        parent_keys = inn.keys[0]
-        array_of_objects = inn[parent_keys]["hits"].dig("hits")
-
-        array_of_objects.map do |item|
-          inner_hit_simple  = item.fetch("_source", {})
-          parent_keys_split = parent_keys.split('.')
-          if options[:keys_nested]
-            hash = NestedHash.new.hasherizer( parent_keys_split, inner_hit_simple )
-          else
-            { parent_keys => inner_hit_simple }
-          end
-        end
-      end
-    # Case E - nested query matching on 2 different datatypes
-    elsif includes_nested_query && nested_query_type == "multi_path" && !query_body.keys.include?(:fields)
-      # TODO - Find out if this condition even matters
-      results = hits["hits"].map { |hit| hit["inner_hits"] }
-
-    # Case D - NOT a nested query AND NO query_body-fields >> return source ?? 
-    elsif !includes_nested_query && !query_body.keys.include?(:fields)
+    if query_body.dig(:_source).class == Hash
       # we're getting the whole document and we can find in _source
       results = hits["hits"].map {|hit| hit["_source"]}
-      # TODO- implement nested vs dotted option
-    
-    # Cases B & C still need to be resolved in section below
+      
+      # Tested - implementation of nested vs dotted option - when line below is exposed, 
+      # and &keys_nested=true is in query, I get Error: JSON::NestingError - nesting of 100 is too deep
+      # results = options[:keys_nested] ? NestedHash.new(results) : results
     else
-      # we're getting a subset of fields...
       results = hits["hits"].map do |hit|
         found = hit.fetch("fields", {})
+        
         # Unless a query term is also a nested data type, fields requested for a nested_data_type are defined under _source
         from_source = hit.fetch("_source", {})
         dotted_from_source = NestedHash.new.withdotkeys(from_source)
@@ -171,6 +144,7 @@ module DataMagic
         delete_set = Set[]
         
         delete_set.each { |k| found.delete k }
+        
         # each result looks like this:
         # {"city"=>["Springfield"], "address"=>["742 Evergreen Terrace"], "children" => [{...}, {...}, {...}] }
         found.keys.each { |key| found[key] = found[key].length > 1 ? found[key] : found[key][0] }
@@ -178,13 +152,15 @@ module DataMagic
         # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace, "children" => [{...}, {...}, {...}]}
         
         # re-insert null fields that didn't get returned by ES
-        query_body[:fields].each do |field|
-          if !(found.has_key?(field) || found.has_key?(field.to_s)) && !delete_set.include?(field || field.to_s)
-            found[field] = nil
+        if query_body[:fields]
+          query_body[:fields].each do |field|
+            if !(found.has_key?(field) || found.has_key?(field.to_s)) && !delete_set.include?(field || field.to_s)
+              found[field] = nil
+            end
           end
         end
 
-        # Collect inner hits for when match term is a nested datatype
+        # Collect inner hits
         nested_details_hash = {}
         if !inner.empty?
           inner.keys.each do |inn_key|
@@ -195,23 +171,32 @@ module DataMagic
               details.keys.each do |key|
                 n_hash[key] = details[key]
               end
+              # Convert to dotted keys
               n_hash = n_hash.withdotkeys
-              keys_to_keep = nested_fields_filter.select { |f| f.start_with? inn_key }.map do |n|
-                n.gsub(inn_key + ".","")
-              end
-              n_hash_filtered = n_hash.select { |k| keys_to_keep.include?(k) }
 
-              n_hash_filtered
+              # If there is a fields filter for nested datatypes, apply it here
+              if !nested_fields_filter.empty?
+                keys_to_keep = nested_fields_filter.select { |f| f.start_with? inn_key }.map do |n|
+                  n.gsub(inn_key + ".","")
+                end
+                n_hash_filtered = n_hash.select { |k| keys_to_keep.include?(k) }
+              end
+
+              !n_hash_filtered.nil? ? n_hash_filtered : n_hash
             end
 
+            # Set the nested data type string as the key and the array of inner hits as the value
             nested_details_hash[inn_key] = inner_details
           end
         end
         
+        # If nested hits, combine with other fields in found hash
         if !nested_details_hash.empty?
           found = found.merge(nested_details_hash)
         end
 
+        # If keys_nested option passed in params, then return result keys in nested format
+        # Default setting is to return results with dotted keys
         found = options[:keys_nested] ? NestedHash.new(found) : found
 
         found
