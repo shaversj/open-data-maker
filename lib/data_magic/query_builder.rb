@@ -30,8 +30,8 @@ module DataMagic
         if !nested_query_pairs.empty? && query_pairs.empty?
           add_filter_with_nested_query_to_query_hash(nested_query_pairs, query_hash)
           nested_query = true
-        elsif !query_pairs.empty? && !nested_query_pairs.empty?
-          build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_pairs, query_hash)
+        elsif !nested_query_pairs.empty? && !query_pairs.empty?
+          build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
           nested_query = true
         end
         
@@ -170,22 +170,22 @@ module DataMagic
 
 
       def incorporate_nested_with_must_query(query_hash, nested_query_pairs)
-        nested_query = build_nested_query(nested_query_pairs)
-        
-        query_hash[:query][:bool][:must].push(nested_query)
-
+        add_filter_with_nested_query_to_query_hash(nested_query_pairs, query_hash)
         query_hash
       end
 
-      def build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_pairs, query_hash)
-        if !query_hash.dig(:query,:bool,:filter).empty?
+      def build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
+        has_a_filter_key = !query_hash.dig(:query,:bool,:filter).empty?
+        has_a_must_key   = !query_hash.dig(:query,:bool,:must).nil?
+
+        if has_a_filter_key
           query_hash_with_nested_query = incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
         end
         
-        if !query_hash.dig(:query,:bool,:must).nil?
+        if has_a_must_key && !has_a_filter_key
           query_hash_with_nested_query = incorporate_nested_with_must_query(query_hash, nested_query_pairs)
         end
-        
+
         query_hash_with_nested_query
       end
 
