@@ -144,7 +144,6 @@ module DataMagic
       end
 
       def build_nested_query(nested_query_pairs)
-        # TODO - figure out when to be using filter vs must...
         paths_and_matches = sort_nested_query_paths_and_matches(nested_query_pairs)
 
         paths = Set[]
@@ -169,23 +168,33 @@ module DataMagic
       end
 
 
-      def incorporate_nested_with_must_query(query_hash, nested_query_pairs)
+      def incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
         add_filter_with_nested_query_to_query_hash(nested_query_pairs, query_hash)
+        
+        match_items = []
+        item = {}
+
+        item[:common] = query_hash[:query][:common]
+        match_items.push(item)
+        
+        query_hash[:query].delete(:common)
+        query_hash[:query][:bool][:must] = match_items
+
         query_hash
       end
 
       def build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
-        has_a_filter_key = !query_hash.dig(:query,:bool,:filter).empty?
-        has_a_must_key   = !query_hash.dig(:query,:bool,:must).nil?
+        has_a_filter_key = !query_hash.dig(:query,:bool,:filter).nil?
+        has_a_common_key = !query_hash.dig(:query,:common).nil?
 
         if has_a_filter_key
           query_hash_with_nested_query = incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
         end
         
-        if has_a_must_key && !has_a_filter_key
-          query_hash_with_nested_query = incorporate_nested_with_must_query(query_hash, nested_query_pairs)
+        if has_a_common_key && !has_a_filter_key
+          query_hash_with_nested_query = incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
         end
-
+        
         query_hash_with_nested_query
       end
 
