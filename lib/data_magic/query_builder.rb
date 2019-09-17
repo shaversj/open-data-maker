@@ -21,14 +21,14 @@ module DataMagic
         term_pairs = determine_query_term_datatypes(params)
         nested_query_pairs = term_pairs[:nested_query_pairs]
         query_pairs        = term_pairs[:query_pairs]
-
+        
         # Use stretchy to build query
         squery = generate_squery(query_pairs, options, config)
         query_hash[:query] = squery.request[:body][:query]
 
         nested_query = false
         if !nested_query_pairs.empty? && query_pairs.empty?
-          add_filter_with_nested_query_to_query_hash(nested_query_pairs, query_hash)
+          build_query_from_nested_datatypes(nested_query_pairs, query_hash)
           nested_query = true
         elsif !nested_query_pairs.empty? && !query_pairs.empty?
           build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
@@ -136,13 +136,6 @@ module DataMagic
         paths_and_matches
       end
 
-      def add_filter_with_nested_query_to_query_hash(nested_query_pairs, query_hash)
-        query_hash[:query][:bool] = {}
-        query_hash[:query][:bool][:filter] = build_nested_query(nested_query_pairs)
-
-        query_hash
-      end
-
       def build_nested_query(nested_query_pairs)
         paths_and_matches = sort_nested_query_paths_and_matches(nested_query_pairs)
 
@@ -157,45 +150,6 @@ module DataMagic
         end
 
         nested_query
-      end
-
-      def incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
-        nested_query = build_nested_query(nested_query_pairs)
-        
-        query_hash[:query][:bool][:filter].push(nested_query)
-
-        query_hash
-      end
-
-
-      def incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
-        add_filter_with_nested_query_to_query_hash(nested_query_pairs, query_hash)
-        
-        match_items = []
-        item = {}
-
-        item[:common] = query_hash[:query][:common]
-        match_items.push(item)
-        
-        query_hash[:query].delete(:common)
-        query_hash[:query][:bool][:must] = match_items
-
-        query_hash
-      end
-
-      def build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
-        has_a_filter_key = !query_hash.dig(:query,:bool,:filter).nil?
-        has_a_common_key = !query_hash.dig(:query,:common).nil?
-
-        if has_a_filter_key
-          query_hash_with_nested_query = incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
-        end
-        
-        if has_a_common_key && !has_a_filter_key
-          query_hash_with_nested_query = incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
-        end
-        
-        query_hash_with_nested_query
       end
 
       def get_outer_nested_query(inner_queries)
@@ -214,6 +168,76 @@ module DataMagic
             inner_hits: {}
           }
         }
+      end
+
+      def add_bool_to_query_hash(query_hash)
+        query_hash[:query][:bool] = {}
+      end
+
+      def add_filter_key_to_bool_on_query_hash(query_hash)
+        query_hash[:query][:bool][:filter] = {}
+
+        query_hash
+      end
+
+      def add_must_key_to_bool_on_query_hash(query_hash)
+        query_hash[:query][:bool][:must] = {}
+
+        query_hash
+      end
+
+      def build_query_from_nested_datatypes(nested_query_pairs, query_hash)
+        add_bool_to_query_hash(query_hash)
+        add_filter_key_to_bool_on_query_hash(query_hash)
+        query_hash[:query][:bool][:filter] = build_nested_query(nested_query_pairs)
+
+        query_hash
+      end
+
+      def incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
+        nested_query = build_nested_query(nested_query_pairs)
+        
+        query_hash[:query][:bool][:filter].push(nested_query)
+
+        query_hash
+      end
+
+
+      def move_common_key_to_must_key_on_query_hash(query_hash)
+        common = {}
+        common[:common] = query_hash[:query][:common]
+        
+        query_hash[:query].delete(:common)
+        query_hash[:query][:bool][:must] = common
+        
+        query_hash
+      end
+
+      def incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
+        if (query_hash.dig(:query,:bool).nil?)
+          add_bool_to_query_hash(query_hash)
+        end
+        
+        if (query_hash.dig(:query,:bool,:must).nil?)
+          add_must_key_to_bool_on_query_hash(query_hash)
+          move_common_key_to_must_key_on_query_hash(query_hash)
+        else
+          add_filter_key_to_bool_on_query_hash(query_hash)
+        end
+
+        query_hash[:query][:bool][:filter] = build_nested_query(nested_query_pairs)
+
+        query_hash
+      end
+
+      def build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
+        if !query_hash.dig(:query,:bool,:filter).nil?
+          query_hash_with_nested_query = incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
+        else
+          query_hash_with_nested_query = incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
+        end
+
+        query_hash_with_nested_query
       end
 
       def get_restrict_fields(options)
