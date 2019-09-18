@@ -21,7 +21,7 @@ module DataMagic
         term_pairs = determine_query_term_datatypes(params)
         nested_query_pairs = term_pairs[:nested_query_pairs]
         query_pairs        = term_pairs[:query_pairs]
-        
+
         # Use stretchy to build query
         squery = generate_squery(query_pairs, options, config)
         query_hash[:query] = squery.request[:body][:query]
@@ -121,32 +121,68 @@ module DataMagic
         }
       end
 
-      def sort_nested_query_paths_and_matches(nested_query_pairs)
-        paths_and_matches = []
+      def outer_range_wrapper(key, range_values)
+        field = key.chomp("__range")
+        
+        range_hash = { 
+          or: [{
+            range: {
+              field => range_values
+            }
+          }]
+        }
+
+        range_hash
+      end
+      
+      def get_nested_range_query(key, value)
+        range_params = value.split("..")
+        first, last = range_params
+
+        if !first.empty? && !last.empty?
+          range_values = { gte: first, lte: last } 
+        elsif first.empty?
+          range_values = { lte: last }
+        else
+          range_values = { gte: first }
+        end
+
+        range_hash = outer_range_wrapper(key, range_values)
+        
+        range_hash
+      end
+
+      def sort_nested_query_paths_and_terms(nested_query_pairs)
+        paths_and_terms = []
         nested_query_pairs.each do |key, value|
           if nested_data_types.any? {|nested| key.start_with? nested }
             path = nested_data_types.select {|nested| key.start_with? nested }.join("")
           end
 
-          paths_and_matches.push({
+          range_query = key.include?("__range")
+          if range_query
+            query_term = get_nested_range_query(key, value)
+          else
+            query_term = { match: { key => value }}
+          end
+          paths_and_terms.push({
             path: path,
-            match: { match: { key => value }}
+            term: query_term
           })
         end
-        paths_and_matches
+        paths_and_terms
       end
 
       def build_nested_query(nested_query_pairs)
-        paths_and_matches = sort_nested_query_paths_and_matches(nested_query_pairs)
+        paths_and_terms = sort_nested_query_paths_and_terms(nested_query_pairs)
 
         paths = Set[]
-        paths_and_matches.each { |hash| paths.add(hash[:path]) }
+        paths_and_terms.each { |hash| paths.add(hash[:path]) }
 
         if paths.length == 1
-          # query_hash[:post_es_response][:nested_type] = "single_path"
-          path    = paths.to_a[0]
-          matches = paths_and_matches.map { |item| item[:match] }
-          nested_query = get_inner_nested_query(path, matches)
+          path         = paths.to_a[0]
+          terms        = paths_and_terms.map { |item| item[:term] }
+          nested_query = get_inner_nested_query(path, terms)
         end
 
         nested_query
