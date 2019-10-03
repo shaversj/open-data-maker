@@ -6,7 +6,6 @@ require 'csv'
 require 'stretchy'
 require 'hashie'
 require './lib/nested_hash'
-require './lib/hash_dig_and_collect'
 require 'aws-sdk'
 require 'uri'
 require 'cf-app-utils'
@@ -20,10 +19,6 @@ require_relative 'data_magic/error_checker'
 require_relative 'zipcode/zipcode'
 
 SafeYAML::OPTIONS[:default_mode] = :safe
-
-class Hash
-  include HashDigAndCollect
-end
 
 class IndifferentHash < Hash
   include Hashie::Extensions::MergeInitializer
