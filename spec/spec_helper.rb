@@ -1,3 +1,6 @@
+require 'simplecov'
+SimpleCov.start
+
 ENV['DATA_PATH']  = nil
 ENV['RACK_ENV'] ||= 'test'
 RACK_ENV          = ENV['RACK_ENV'] unless defined?(RACK_ENV)
