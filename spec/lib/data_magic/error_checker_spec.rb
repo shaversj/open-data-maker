@@ -232,6 +232,11 @@ describe 'API errors', type: 'feature' do
         let(:params) { { "population__range" => "2..3" } }
         it_correctly "does not return an error"
       end
+
+      context "in the right format, with negative values" do
+        let(:params) { { "population__range" => "-2..3" } }
+        it_correctly "does not return an error"
+      end
     end
 
     context "when multiple errors occur" do

@@ -67,9 +67,9 @@ module DataMagic
       def report_bad_range_argument(params)
         ranges = params.select do |p,v|
           p =~ /__range$/ and
-            v !~ / ^(\d+(\.\d+)?)? # optional starting number
+            v !~ / ^(-?\d+(\.\d+)?)? # optional starting number
                    \.\.           # range dots
-                   (\d+(\.\d+)?)?  # optional ending number
+                   (-?\d+(\.\d+)?)?  # optional ending number
                    (,(\d+(\.\d+)?)?\.\.(\d+(\.\d+)?)?)* # and more, with commas
                    $/x
         end
