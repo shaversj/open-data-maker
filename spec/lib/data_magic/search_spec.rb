@@ -295,6 +295,26 @@ describe "DataMagic #search" do
         expect(result["2012"]).to include("sat_average")
       end
     end
+  end
 
+  describe "with nested fields in the data" do
+    before :example do
+      ENV['DATA_PATH'] = './spec/fixtures/nested_files'
+      DataMagic.init(load_now: true)
+    end
+
+    after :example do
+      DataMagic.destroy
+    end
+
+    context 'when keys_nested=true is in params and fields param is passed' do
+      it 'returns data in nested format' do
+        response = DataMagic.search({id: "11"}, {:keys_nested => true, :fields => ["2012.sat_average"] })
+        result = response["results"][0]
+
+        expect(result).not_to include("2012.sat_average")
+        expect(result).to include("2012" => {"sat_average" => nil})
+      end
+    end
   end
 end
