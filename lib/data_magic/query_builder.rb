@@ -17,24 +17,36 @@ module DataMagic
         nested_fields = !options[:fields].nil? ? nested_fields(options[:fields]) : []
         query_fields  = !options[:fields].nil? ? options[:fields] - nested_fields : []
 
+        original_params = params.clone()
+        
         # check params keys - are any nested data type?
         term_pairs = determine_query_term_datatypes(params)
         nested_query_pairs = term_pairs[:nested_query_pairs]
         query_pairs        = term_pairs[:query_pairs]
 
+        all_programs = options[:all_programs]
+        
         # Use stretchy to build query
-        squery = generate_squery(query_pairs, options, config)
+        if all_programs
+          # Treat all query fields as standard data types, rather than nested datatypes
+          squery = generate_squery(original_params, options, config)
+        else
+          # Only pass standard data types to squery generator function
+          squery = generate_squery(query_pairs, options, config)
+        end
         query_hash[:query] = squery.request[:body][:query]
 
         nested_query = false
-        if !nested_query_pairs.empty? && query_pairs.empty?
-          build_query_from_nested_datatypes(nested_query_pairs, query_hash)
+        if !all_programs && !nested_query_pairs.empty?
           nested_query = true
-        elsif !nested_query_pairs.empty? && !query_pairs.empty?
-          build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
-          nested_query = true
+          
+          if query_pairs.empty?
+            build_query_from_nested_datatypes(nested_query_pairs, query_hash)
+          else
+            build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
+          end
         end
-        
+
         if !query_fields.empty?
           query_hash[:fields] = query_fields
         end

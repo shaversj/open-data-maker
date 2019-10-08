@@ -99,7 +99,7 @@ end
 # see comment in method body
 def get_search_args_from_params(params)
   options = {}
-  %w(metrics sort fields zip distance page per_page debug keys_nested).each do |opt|
+  %w(metrics sort fields zip distance page per_page debug keys_nested all_programs).each do |opt|
     options[opt.to_sym] = params.delete("_#{opt}")
     # TODO: remove next line to end support for un-prefixed option parameters
     options[opt.to_sym] ||= params.delete(opt)
@@ -113,7 +113,8 @@ def get_search_args_from_params(params)
 
   options[:fields] = check_fields_for_wildcards(options[:fields])
   
-  options[:keys_nested] = check_for_valid_key_format_input(options[:keys_nested])  
+  options[:keys_nested]  = check_for_valid_key_format_input(options[:keys_nested])  
+  options[:all_programs] = check_for_valid_key_format_input(options[:all_programs])  
 
   options[:metrics] = options[:metrics].split(/\s*,\s*/) if options[:metrics]
   options
