@@ -23,7 +23,7 @@ describe DataMagic::QueryBuilder do
   let(:options) { {} }
   let(:query_hash) { DataMagic::QueryBuilder.from_params(subject, options, DataMagic.config) }
 
-  shared_examples "builds a nested query" do
+  shared_examples "builds a query" do
     it "with a query section" do
       expect(query_hash[:query]).to eql expected_query
     end
@@ -32,24 +32,35 @@ describe DataMagic::QueryBuilder do
     end
   end
 
-  describe "can build a nested query to exact match on a nested datatype field" do
-    subject { { "2016.programs.cip_4_digit" => "1312" } }
-    let(:expected_query) { 
-        { bool: { filter: {
-            nested: {
-                inner_hits: {},
-                path: "2016.programs.cip_4_digit",
-                query: {
-                    bool: {
-                        must: [{
-                            match: { "2016.programs.cip_4_digit" => "1312" }
-                        }]
-                    }
-                }
-            }
-        } } } 
-    }
+  describe "builds queries based on nested datatype fields" do
+    context "in absence of all_programs param" do
+      subject { { "2016.programs.cip_4_digit" => "1312" } }
+      let(:expected_query) { 
+          { bool: { filter: {
+              nested: {
+                  inner_hits: {},
+                  path: "2016.programs.cip_4_digit",
+                  query: {
+                      bool: {
+                          must: [{
+                              match: { "2016.programs.cip_4_digit" => "1312" }
+                          }]
+                      }
+                  }
+              }
+          } } } 
+      }
+      it_correctly "builds a query"
+    end
 
-    it_correctly "builds a nested query"
+    context "in presence of all_programs param" do
+      subject {{ "2016.programs.cip_4_digit" => "1312" }}
+      let(:options) {{ :all_programs => true }}
+
+      let(:expected_query) {{ match: { "2016.programs.cip_4_digit" => "1312" }} }
+      let(:nested_meta)    {{ post_es_response: {}, from: 0, size: 20, _source: {:exclude=>["_*"]} } }
+
+      it_correctly "builds a query"
+    end
   end
 end
