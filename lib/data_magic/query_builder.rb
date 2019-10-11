@@ -25,7 +25,6 @@ module DataMagic
         query_pairs        = term_pairs[:query_pairs]
 
         all_programs = options[:all_programs]
-        
         # Use stretchy to build query
         if all_programs
           # Treat all query fields as standard data types, rather than nested datatypes
@@ -391,19 +390,20 @@ module DataMagic
       end
 
       def set_query_source(query_hash, nested_query, nested_fields, query_fields)
-        # CASES
-        # - not a nested query, but the listed fields are nested datatypes - then set up a source filter
-        # - is a nested query and no fields specified
-        # - is a nested query and fields are specified >> the nested field types can't be retrieved via ES
-            # figure out how to select fields from inner hits during result processing
+        # The distinction between nested datatype query vs non-nested datatype query refers 
+        # to the datatype of the field that must be matched.
+
+        # The distinction between nested_fields vs query_fields refers to the fields returned in the response. The
+        # response fields come from different sources depending on the query.
         
-        # Source filter will contain fields that come from nested datatypes (not to be confused with nested fields, as a structure)
-        # if there is a nested_query AND if there are query_fields AND no nested fields
+        # if there is a nested_query OR if there are non-nested query_fields AND no nested fields
         if nested_query || (!query_fields.empty? && nested_fields.empty?)
           query_hash[:_source] = false
+        
         # if this is NOT a nested_query AND there are nested fields, then filter source on those fields
         elsif !nested_query && !nested_fields.empty?
-            query_hash[:_source] = nested_fields
+          query_hash[:_source] = nested_fields
+        
         # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
         else
           query_hash[:_source] = { exclude: ["_*"] }
@@ -416,7 +416,6 @@ module DataMagic
 
         query_hash
       end
-
     end
   end
 end
