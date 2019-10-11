@@ -78,7 +78,7 @@ module DataMagic
 
   def self.create_row_map(options)
     data = config.read_path(config.files.first)
-    row_map = DataMagic::Index::RowMap.new('id', 'ope6_id')
+    row_map = DataMagic::Index::RowMap.new('id', 'id')
     CSV.new(
         data,
         headers: true,
