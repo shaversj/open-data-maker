@@ -295,6 +295,54 @@ describe "DataMagic #search" do
         expect(result["2012"]).to include("sat_average")
       end
     end
+  end
 
+  describe "with nested fields in the data" do
+    before :example do
+      ENV['DATA_PATH'] = './spec/fixtures/nested_files'
+      DataMagic.init(load_now: true)
+    end
+
+    after :example do
+      DataMagic.destroy
+    end
+
+
+    context 'when fields param is not passed' do
+      it 'returns data in nested format by default' do
+        response = DataMagic.search({id: "11"})
+        result = response["results"][0]
+
+        expect(result).to include( "2012" => {
+          "earnings" => {
+            "6_yrs_after_entry" => {
+              "median" =>2608,
+              "percent_gt_25k" =>0.92
+            }
+          }, "sat_average" => nil }
+        )
+        expect(result).not_to include("2012.earnings")
+      end
+    end
+
+    context 'when fields param is passed and keys_nested is NOT passed in params' do
+      it 'returns data in dotted key format by default' do
+        response = DataMagic.search({id: "11"}, {:fields => ["2012.sat_average"] })
+        result = response["results"][0]
+
+        expect(result).to include("2012.sat_average")
+        expect(result).not_to include("2012" => {"sat_average" => nil})
+      end
+    end
+
+    context 'when keys_nested=true is in params and fields param is passed' do
+      it 'returns data in nested format' do
+        response = DataMagic.search({id: "11"}, {:keys_nested => true, :fields => ["2012.sat_average"] })
+        result = response["results"][0]
+
+        expect(result).not_to include("2012.sat_average")
+        expect(result).to include("2012" => {"sat_average" => nil})
+      end
+    end
   end
 end

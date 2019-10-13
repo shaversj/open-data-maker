@@ -1,0 +1,57 @@
+---
+version: 1.5.5
+api: schools
+index: school-data
+unique:
+- id
+options:
+  limit_rows: 10
+
+dictionary:
+  id:
+    source: UNITID
+    type: integer
+    description: Unit ID for institution
+  school.name:
+    source: INSTNM
+    type: autocomplete
+    description: Institution name
+  school.city:
+    source: CITY
+    type: autocomplete
+    description: City
+
+shared_config: &shared_config
+  contents:
+  - earnings
+  - completion
+  - aid
+  - repayment
+  - student
+  - cost
+  - academics
+  - admissions
+
+data_types:
+  nested:
+    - 2016.programs.cip_4_digit
+
+partial_map:
+  program_debt:
+    root: id
+    path: programs.cip_4_digit
+    link: programs.cip_4_digit.ope6_id
+
+files:
+  - name: ProgramDebt1516_1617PP.csv
+    map: program_debt
+    nest:
+      parent_missing: skip
+      key: latest
+      contents:
+      - programs
+  - name: MERGED2016_17_PP.csv
+    nest:
+      parent_missing: skip
+      key: 2016
+      <<: *shared_config

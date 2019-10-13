@@ -42,6 +42,7 @@ group :test do
   gem 'rspec-mocks'
   gem 'rack-test', :require => 'rack/test'
   gem 'rspec_junit_formatter'
+  gem 'simplecov', require: false
 end
 
 group 'dev' do

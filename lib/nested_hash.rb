@@ -63,17 +63,4 @@ class NestedHash < Hash
       dotkey_set(keys.slice(1..-1).join('.'), value, deep_hash[first])
     end
   end
-
-  # Use recursion to create a nested hash from an array of keys based on a dotted string
-  # Take code from https://stackoverflow.com/a/30551874/8481019
-  def hasherizer(array_of_keys, last_value)
-    if array_of_keys.empty?
-      last_value
-    else
-      {}.tap do |hash|
-        hash[array_of_keys.shift] = hasherizer(array_of_keys, last_value)
-      end
-    end
-  end
-
 end

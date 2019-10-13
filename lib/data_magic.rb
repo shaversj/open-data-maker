@@ -6,7 +6,6 @@ require 'csv'
 require 'stretchy'
 require 'hashie'
 require './lib/nested_hash'
-require './lib/hash_dig_and_collect'
 require 'aws-sdk'
 require 'uri'
 require 'cf-app-utils'
@@ -20,10 +19,6 @@ require_relative 'data_magic/error_checker'
 require_relative 'zipcode/zipcode'
 
 SafeYAML::OPTIONS[:default_mode] = :safe
-
-class Hash
-  include HashDigAndCollect
-end
 
 class IndifferentHash < Hash
   include Hashie::Extensions::MergeInitializer
@@ -109,16 +104,48 @@ module DataMagic
     # Everything after this is aimed at processing the results from ES for the browser 
     hits = result["hits"]
     total = hits["total"]
-    results = []
 
-    # Before processing result, check if the full_query includes a nested query
-    includes_nested_query = false
-    nested_query_type = ""
-    if result_processing_info[:nested_type].is_a?(String)
-      includes_nested_query = true
-      nested_query_type = result_processing_info[:nested_type]
-    end
+    results = process_result_from_es( hits, result_processing_info, query_body, options )
     
+    metadata = {
+      "total" => total,
+      "page" => query_body[:from] / query_body[:size],
+      "per_page" => query_body[:size]
+    }
+    if options[:debug]
+      metadata["search_time"] = search_time
+      metadata["ES_took_ms"] = result["took"]
+    end
+
+    # assemble a simpler json document to return
+    simple_result =
+    {
+      "metadata" => metadata,
+      "results" => 	results
+    }
+
+    if options[:command] == 'stats'
+      # Remove metrics that weren't requested.
+      aggregations = result['aggregations'] || {}
+      aggregations.each do |f_name, values|
+        if options[:metrics] && options[:metrics].size > 0
+          aggregations[f_name] = values.reject { |k, v| !(options[:metrics].include? k) }
+        else
+          # Keep everything is no metric list is provided
+          aggregations[f_name] = values
+        end
+      end
+
+      simple_result.merge!({"aggregations" => aggregations})
+    end
+  
+    simple_result
+  end
+
+  private
+
+  def self.process_result_from_es( hits, result_processing_info, query_body, options )
+    results = []
     # Collect list of nested fields that need to be filtered
     # This is neccessary because the standard ES fields filter creates arrays from nested data, which we don't want
     nested_fields_filter = result_processing_info[:nested_fields_filter] ? result_processing_info[:nested_fields_filter] : []
@@ -203,42 +230,8 @@ module DataMagic
       end
     end
 
-    metadata = {
-      "total" => total,
-      "page" => query_body[:from] / query_body[:size],
-      "per_page" => query_body[:size]
-    }
-    if options[:debug]
-      metadata["search_time"] = search_time
-      metadata["ES_took_ms"] = result["took"]
-    end
-
-    # assemble a simpler json document to return
-    simple_result =
-    {
-      "metadata" => metadata,
-      "results" => 	results
-    }
-
-    if options[:command] == 'stats'
-      # Remove metrics that weren't requested.
-      aggregations = result['aggregations'] || {}
-      aggregations.each do |f_name, values|
-        if options[:metrics] && options[:metrics].size > 0
-          aggregations[f_name] = values.reject { |k, v| !(options[:metrics].include? k) }
-        else
-          # Keep everything is no metric list is provided
-          aggregations[f_name] = values
-        end
-      end
-
-      simple_result.merge!({"aggregations" => aggregations})
-    end
-  
-    simple_result
+    results
   end
-
-  private
 
   def self.document_data_type(hash, root='')
     hash.each do |key, value|
