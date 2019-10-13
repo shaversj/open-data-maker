@@ -10,7 +10,11 @@ module DataMagic
 
       def set_headers(doc)
         return if headers
-        @headers = doc.headers
+        if doc.is_a?(Array)
+          @headers = doc[0].headers
+        else
+          @headers = doc.headers
+        end
       end
 
       def skipping(id)

@@ -125,6 +125,13 @@ module DataMagic
       @api_endpoints.keys
     end
 
+    def es_data_types
+      @data.fetch('data_types', {})
+    end
+
+    def partial_doc_map
+      @data.fetch('partial_map', {})
+    end
 
     def find_index_for(api)
       api_info = @api_endpoints[api] || {}

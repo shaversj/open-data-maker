@@ -1,4 +1,5 @@
 require 'forwardable'
+require 'yaml'
 
 require_relative 'config'
 require_relative 'index/builder_data'
@@ -10,14 +11,15 @@ require_relative 'index/output'
 require_relative 'index/repository'
 require_relative 'index/row_importer'
 require_relative 'index/super_client'
+require_relative 'index/row_map'
 
 require 'action_view'  # for distance_of_time_in_words (logging time)
 include ActionView::Helpers::DateHelper  # for distance_of_time_in_words (logging time)
 
 module DataMagic
   # data could be a String or an io stream
-  def self.import_csv(data, options={})
-    Index::Importer.process(data, options)
+  def self.import_csv(data, options={}, row_map={})
+    Index::Importer.process(data, options, row_map)
   end
 
   def self.log_index_start
@@ -32,14 +34,14 @@ module DataMagic
     logger.debug "duration: #{end_time - start_time}"
   end
 
-  def self.index_file_process(options = {}, filepath)
+  def self.index_file_process(options = {}, filepath, row_map)
     begin
       logger.debug "--"*40
       logger.debug "--    #{filepath}"
       logger.debug "--"*40
       file_start = Time.now
       data = config.read_path(filepath)
-      rows, _ = DataMagic.import_csv(data, options)
+      rows, _ = DataMagic.import_csv(data, options, row_map)
       file_end = Time.now
       logger.debug "imported #{rows} rows in #{distance_of_time_in_words(file_end, file_start)}, ms: #{file_end - file_start}"
     rescue DataMagic::InvalidData => e
@@ -56,6 +58,9 @@ module DataMagic
       starting_from = config.files.find_index { |file| file.match( /#{options[:continue]}/ ) }
       logger.info "Indexing continues with file: #{options[:continue]}" unless starting_from.nil?
     end
+    # for partial data rows, this is a map to a related key
+    row_map = create_row_map(options)
+    # iterate config data files
     logger.info "files: #{self.config.files[starting_from.to_i..-1]}"
     config.files[starting_from.to_i..-1].each_with_index do |filepath, index|
       fname = filepath.split('/').last
@@ -64,9 +69,24 @@ module DataMagic
       options[:root] = config.info_for_file(starting_from + index, :root)
       options[:only] = config.info_for_file(starting_from + index, :only)
       options[:nest] = config.info_for_file(starting_from + index, :nest)
-      index_file_process(options, filepath)
+      options[:map] = config.info_for_file(starting_from + index, :map)
+      options[:partial_map] = config.partial_doc_map[options[:map]] unless config.partial_doc_map[options[:map]].nil?
+      index_file_process(options, filepath, row_map)
     end
     log_index_end(start_time)
+  end
+
+  def self.create_row_map(options)
+    data = config.read_path(config.files.first)
+    row_map = DataMagic::Index::RowMap.new('id', 'id')
+    CSV.new(
+        data,
+        headers: true,
+        header_converters: lambda { |str| str.strip.to_sym }
+    ).each do |row|
+      row_map.add_item(row.to_hash)
+    end
+    row_map
   end
 
   def self.import_with_dictionary(options = {})
@@ -98,6 +118,8 @@ module DataMagic
         raise ArgumentError, "delta_original file must contiain :delta_only key in data.yaml. No :delta_only key found."
       end
 
+      row_map = create_row_map(options)
+
       # use specified :delta_update filename, or fall back to :delta_original if not provided
       delta_filename = options[:delta_update] || options[:delta_original]
       config.files[original_file_index..original_file_index].each do |filepath|
@@ -111,7 +133,9 @@ module DataMagic
         options[:nest] = config.info_for_file(original_file_index, :nest)
         options[:root] = false # we are not creating new documents
         options[:nest][:parent_missing] = 'skip' # we allow skips
-        index_file_process(options, delta_filepath)
+        options[:map] = config.info_for_file(original_file_index, :map)
+        options[:partial_map] = config.partial_doc_map[options[:map]] unless config.partial_doc_map[options[:map]].nil?
+        index_file_process(options, delta_filepath, row_map)
       end
       log_index_end(start_time)
     else

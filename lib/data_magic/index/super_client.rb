@@ -22,6 +22,10 @@ module DataMagic
         options[:root] || options[:nest] == nil
       end
 
+      def nested_partial?
+        options[:map]
+      end
+
       def allow_skips?
         options[:nest][:parent_missing] == 'skip'
       end

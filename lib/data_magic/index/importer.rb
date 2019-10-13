@@ -3,18 +3,18 @@ require 'forwardable'
 module DataMagic
   module Index
     class Importer
-      attr_reader :raw_data, :options
+      attr_reader :raw_data, :options, :row_map
 
-      def initialize(raw_data, options)
+      def initialize(raw_data, options, row_map)
         @raw_data = raw_data
         @options = options
+        @row_map = row_map
       end
 
       def process
         setup
         parse_and_log
         finish!
-
         [row_count, headers]
       end
 
@@ -24,6 +24,10 @@ module DataMagic
 
       def builder_data
         @builder_data ||= BuilderData.new(raw_data, options)
+      end
+
+      def row_map
+        @row_map || {}
       end
 
       def output
@@ -48,6 +52,8 @@ module DataMagic
       def parse_csv
         if nprocs == 1
           parse_csv_whole
+        elsif client.nested_partial?
+          parse_csv_mapped
         else
           parse_csv_chunked
         end
@@ -60,7 +66,7 @@ module DataMagic
           headers: true,
           header_converters: lambda { |str| str.strip.to_sym }
         ).each do |row|
-          RowImporter.process(row, self)
+          dispatch_row_importer(row)
           break if at_limit?
         end
       end
@@ -75,7 +81,7 @@ module DataMagic
           chunks_per_proc = (chunk.size / nprocs.to_f).ceil
           Parallel.each(chunk.each_slice(chunks_per_proc)) do |rows|
             rows.each_with_index do |row, idx|
-              RowImporter.process(row, self)
+              dispatch_row_importer(row)
             end
           end
           if !headers
@@ -86,6 +92,65 @@ module DataMagic
         end
       end
 
+      def parse_csv_mapped
+        rocky_chunks = CSV.new(
+          data,
+          headers: true,
+          header_converters: lambda { |str| str.strip.to_sym }
+        ).chunk_while { |a, b|
+          # chunk by nested document link
+          lookup_row_id(a) === lookup_row_id(b)
+        }.to_a
+
+        # rearrange chunks for parallel processing, so our slices are 'roughly' the same size
+        sorted = rocky_chunks.sort_by(&:size)
+        grouped = sorted.each.each_with_index.group_by { |_, index| index % nprocs }
+        smooth_chunks = grouped.map { |_, data|
+          # here we only return the first array , each_with_index was adding in an unwanted index item
+          data.map(&:first)
+        }.flatten(1)
+
+        chunks_per_proc = (smooth_chunks.size / nprocs.to_f).ceil
+
+        Parallel.each(smooth_chunks.each_slice(chunks_per_proc)) do |chunks|
+          chunks.each do |chunk|
+            dispatch_row_importer(chunk)
+          end
+        end
+        increment(smooth_chunks.size)
+      end
+
+      def dispatch_row_importer(row)
+        if client.nested_partial?
+          if row.is_a?(Array)
+            dispatch_row_bulk_importer(row)
+          else
+            row_id = lookup_row_id(row)
+            Array(row_map.map[row_id]).each do |related_id|
+              row << [row_map.id, related_id]
+              RowImporter.process(row, self)
+            end
+          end
+        else
+          RowImporter.process(row, self)
+        end
+      end
+
+      def dispatch_row_bulk_importer(rows)
+        row_id = lookup_row_id(rows[0])
+        Array(row_map.map[row_id]).each do |related_id|
+          rows.each do |row|
+            row << [row_map.id, related_id]
+          end
+          RowBulkImporter.process(rows, self)
+        end
+      end
+
+      def lookup_row_id(row)
+        link = row_map.calculate_column(options[:partial_map]['link'])
+        row.to_hash[link]
+      end
+
       def setup
         client.create_index
         log_setup
@@ -93,7 +158,7 @@ module DataMagic
 
       def finish!
         validate!
-        refresh_index if ENV['RACK_ENV'] == 'test' # refresh for tests only
+        refresh_index if ENV['RACK_ENV'] == 'test'
         log_finish
       end
 

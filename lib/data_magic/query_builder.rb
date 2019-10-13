@@ -1,32 +1,70 @@
 module DataMagic
   module QueryBuilder
     class << self
-      # Creates query from parameters passed into endpoint
+      # Creates query from parameters passed into endpoint and returns a Hash
       def from_params(params, options, config)
         per_page = (options[:per_page] || config.page_size || DataMagic::DEFAULT_PAGE_SIZE).to_i
         page = options[:page].to_i || 0
         per_page = DataMagic::MAX_PAGE_SIZE if per_page > DataMagic::MAX_PAGE_SIZE
+
         query_hash = {
-          from:   page * per_page,
-          size:   per_page,
+          post_es_response: {},
+          from:             page * per_page,
+          size:             per_page,
         }
 
-        squery = generate_squery(params, options, config)
+        # check options[:fields] - are any nested data type?
+        nested_fields = !options[:fields].nil? ? nested_fields(options[:fields]) : []
+        query_fields  = !options[:fields].nil? ? options[:fields] - nested_fields : []
+
+        original_params = params.clone()
+        
+        # check params keys - are any nested data type?
+        term_pairs = determine_query_term_datatypes(params)
+        nested_query_pairs = term_pairs[:nested_query_pairs]
+        query_pairs        = term_pairs[:query_pairs]
+
+        all_programs = options[:all_programs]
+        # Use stretchy to build query
+        if all_programs
+          # Treat all query fields as standard data types, rather than nested datatypes
+          squery = generate_squery(original_params, options, config)
+        else
+          # Only pass standard data types to squery generator function
+          squery = generate_squery(query_pairs, options, config)
+        end
         query_hash[:query] = squery.request[:body][:query]
+
+        nested_query = false
+        if !all_programs && !nested_query_pairs.empty?
+          nested_query = true
+          
+          if query_pairs.empty?
+            build_query_from_nested_datatypes(nested_query_pairs, query_hash)
+          else
+            build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
+          end
+        end
+
+        if !query_fields.empty?
+          query_hash[:fields] = query_fields
+        end
+
+        query_hash[:query].except!(:match_all) unless query_hash[:query][:bool].nil?
+
+        # TODO - Revisit ./spec/lib/data_magic/query_builder_spec.rb:28
+        # That test broke, when the following line was no longer wrapped in a condtional, if query_hash[:query][:bool]
+        # When I commented out the line, nothing broke.. not sure if it is relevant.
+        # query_hash[:query].except!( :terms)
 
         if options[:command] == 'stats'
           query_hash.merge! add_aggregations(params, options, config)
         end
 
-        if options[:fields] && !options[:fields].empty?
-          query_hash[:fields] = get_restrict_fields(options)
-          query_hash[:_source] = false
-        else
-          query_hash[:_source] = {
-                      exclude: ["_*"]
-                    }
-        end
+        query_hash = set_query_source(query_hash, nested_query, nested_fields, query_fields)
+
         query_hash[:sort] = get_sort_order(options[:sort], config) if options[:sort] && !options[:sort].empty?
+
         query_hash
       end
 
@@ -50,6 +88,203 @@ module DataMagic
         end
 
         agg_hash.empty? ? {} : { aggs: agg_hash }
+      end
+
+      def nested_data_types()
+        DataMagic.config.es_data_types["nested"]
+      end
+
+      def field_type_nested?(field_name)
+        if nested_data_types()
+          nested_data_types().any? {|nested| field_name.start_with? nested }
+        end
+      end
+
+      def nested_fields(submitted_fields)
+        nested_fields = []
+        if !submitted_fields.empty?
+          submitted_fields.each do |field_name|
+            if field_type_nested?(field_name)
+              nested_fields.push(field_name)
+            end
+          end
+        end
+        nested_fields
+      end
+
+      def determine_query_term_datatypes(params)
+        nested_terms = params.keys.select { |key| field_type_nested?(key) }
+        
+        nested_query_pairs = {}
+        nested_terms.each { |key| nested_query_pairs[key] = params[key] }
+
+        if !nested_terms.empty?
+          nested_terms.each do |key|
+            params.except!( key )
+          end
+        end
+
+        query_pairs = params
+
+        {
+          nested_query_pairs: nested_query_pairs,
+          query_pairs:        query_pairs
+        }
+      end
+
+      def outer_range_wrapper(key, range_values)
+        field = key.chomp("__range")
+        
+        range_hash = { 
+          or: [{
+            range: {
+              field => range_values
+            }
+          }]
+        }
+
+        range_hash
+      end
+      
+      def get_nested_range_query(key, value)
+        range_params = value.split("..")
+        first, last = range_params
+
+        if !first.empty? && !last.empty?
+          range_values = { gte: first, lte: last } 
+        elsif first.empty?
+          range_values = { lte: last }
+        else
+          range_values = { gte: first }
+        end
+
+        range_hash = outer_range_wrapper(key, range_values)
+        
+        range_hash
+      end
+
+      def sort_nested_query_paths_and_terms(nested_query_pairs)
+        paths_and_terms = []
+        nested_query_pairs.each do |key, value|
+          if nested_data_types.any? {|nested| key.start_with? nested }
+            path = nested_data_types.select {|nested| key.start_with? nested }.join("")
+          end
+
+          range_query = key.include?("__range")
+          if range_query
+            query_term = get_nested_range_query(key, value)
+          else
+            query_term = { match: { key => value }}
+          end
+          paths_and_terms.push({
+            path: path,
+            term: query_term
+          })
+        end
+        paths_and_terms
+      end
+
+      def build_nested_query(nested_query_pairs)
+        paths_and_terms = sort_nested_query_paths_and_terms(nested_query_pairs)
+
+        paths = Set[]
+        paths_and_terms.each { |hash| paths.add(hash[:path]) }
+
+        if paths.length == 1
+          path         = paths.to_a[0]
+          terms        = paths_and_terms.map { |item| item[:term] }
+          nested_query = get_inner_nested_query(path, terms)
+        end
+
+        nested_query
+      end
+
+      def get_outer_nested_query(inner_queries)
+        { must: inner_queries }
+      end
+
+      def get_inner_nested_query(path, matches)
+        { 
+          nested: {
+            path: path,
+            query: {
+              bool: {
+                must: matches
+              }
+            },
+            inner_hits: {}
+          }
+        }
+      end
+
+      def add_bool_to_query_hash(query_hash)
+        query_hash[:query][:bool] = {}
+      end
+
+      def add_filter_key_to_bool_on_query_hash(query_hash)
+        query_hash[:query][:bool][:filter] = {}
+
+        query_hash
+      end
+
+      def add_must_key_to_bool_on_query_hash(query_hash)
+        query_hash[:query][:bool][:must] = {}
+
+        query_hash
+      end
+
+      def build_query_from_nested_datatypes(nested_query_pairs, query_hash)
+        add_bool_to_query_hash(query_hash)
+        add_filter_key_to_bool_on_query_hash(query_hash)
+        query_hash[:query][:bool][:filter] = build_nested_query(nested_query_pairs)
+
+        query_hash
+      end
+
+      def incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
+        nested_query = build_nested_query(nested_query_pairs)
+        
+        query_hash[:query][:bool][:filter].push(nested_query)
+
+        query_hash
+      end
+
+
+      def move_common_key_to_must_key_on_query_hash(query_hash)
+        common = {}
+        common[:common] = query_hash[:query][:common]
+        
+        query_hash[:query].delete(:common)
+        query_hash[:query][:bool][:must] = common
+        
+        query_hash
+      end
+
+      def incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
+        if (query_hash.dig(:query,:bool).nil?)
+          add_bool_to_query_hash(query_hash)
+        end
+        
+        if (query_hash.dig(:query,:bool,:must).nil?)
+          add_must_key_to_bool_on_query_hash(query_hash)
+          move_common_key_to_must_key_on_query_hash(query_hash)
+        else
+          add_filter_key_to_bool_on_query_hash(query_hash)
+        end
+
+        query_hash[:query][:bool][:filter] = build_nested_query(nested_query_pairs)
+
+        query_hash
+      end
+
+      def build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
+        if !query_hash.dig(:query,:bool,:filter).nil?
+          query_hash_with_nested_query = incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
+        else
+          query_hash_with_nested_query = incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
+        end
+
+        query_hash_with_nested_query
       end
 
       def get_restrict_fields(options)
@@ -152,6 +387,34 @@ module DataMagic
           squery = squery.geo_distance(field: 'coords', distance: distance, location: {lat: location[:lat], lon: location[:lon]})
         end
         squery
+      end
+
+      def set_query_source(query_hash, nested_query, nested_fields, query_fields)
+        # The distinction between nested datatype query vs non-nested datatype query refers 
+        # to the datatype of the field that must be matched.
+
+        # The distinction between nested_fields vs query_fields refers to the fields returned in the response. The
+        # response fields come from different sources depending on the query.
+        
+        # if there is a nested_query OR if there are non-nested query_fields AND no nested fields
+        if nested_query || (!query_fields.empty? && nested_fields.empty?)
+          query_hash[:_source] = false
+        
+        # if this is NOT a nested_query AND there are nested fields, then filter source on those fields
+        elsif !nested_query && !nested_fields.empty?
+          query_hash[:_source] = nested_fields
+        
+        # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
+        else
+          query_hash[:_source] = { exclude: ["_*"] }
+        end
+
+        # if this is a nested_query AND there are nested fields, then those fields should be passed to post_es_response key, rather than :_source
+        if nested_query && !nested_fields.empty?
+          query_hash[:post_es_response][:nested_fields_filter] = nested_fields
+        end
+
+        query_hash
       end
     end
   end

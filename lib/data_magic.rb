@@ -10,6 +10,7 @@ require 'aws-sdk'
 require 'uri'
 require 'cf-app-utils'
 require 'logger'
+require 'set'
 
 require_relative 'data_magic/config'
 require_relative 'data_magic/index'
@@ -74,6 +75,9 @@ module DataMagic
     return { errors: errors } if errors.length > 0
 
     query_body = QueryBuilder.from_params(terms, options, config)
+    result_processing_info = query_body[:post_es_response]
+    query_body.delete(:post_es_response)
+
     index_name = index_name_from_options(options)
     logger.info "search terms:#{terms.inspect}"
 
@@ -97,33 +101,12 @@ module DataMagic
     search_time = Time.now.to_f - time_start
     logger.info "ES query time (ms): #{result["took"]} ; Query fetch time (s): #{search_time} ; result: #{result.inspect[0..500]}"
 
+    # Everything after this is aimed at processing the results from ES for the browser 
     hits = result["hits"]
     total = hits["total"]
-    results = []
-    unless query_body.has_key? :fields
-      # we're getting the whole document and we can find in _source
-      results = hits["hits"].map {|hit| hit["_source"]}
-    else
-      # we're getting a subset of fields...
-      results = hits["hits"].map do |hit|
-        found = hit.fetch("fields", {})
-        # each result looks like this:
-        # {"city"=>["Springfield"], "address"=>["742 Evergreen Terrace"]}
 
-        found.keys.each { |key| found[key] = found[key][0] }
-        # now it should look like this:
-        # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace}
-
-        # re-insert null fields that didn't get returned by ES
-        query_body[:fields].each do |field|
-          if !found.has_key?(field)
-            found[field] = nil
-          end
-        end
-        found
-      end
-    end
-
+    results = process_result_from_es( hits, result_processing_info, query_body, options )
+    
     metadata = {
       "total" => total,
       "page" => query_body[:from] / query_body[:size],
@@ -155,22 +138,126 @@ module DataMagic
 
       simple_result.merge!({"aggregations" => aggregations})
     end
-
+  
     simple_result
   end
 
   private
 
-  def self.nested_object_type(hash)
-    hash.each do |key, value|
-      if value.is_a?(Hash) && value[:type].nil?  # things are nested under this
-        hash[key] = {
-          type: 'object',
-          properties: value
-        }
-        nested_object_type(value)
+  def self.process_result_from_es( hits, result_processing_info, query_body, options )
+    results = []
+    # Collect list of nested fields that need to be filtered
+    # This is neccessary because the standard ES fields filter creates arrays from nested data, which we don't want
+    nested_fields_filter = result_processing_info[:nested_fields_filter] ? result_processing_info[:nested_fields_filter] : []
+
+    if query_body.dig(:_source).class == Hash
+      # we're getting the whole document and we can find in _source
+      results = hits["hits"].map {|hit| hit["_source"]}
+      
+      # Tested - implementation of nested vs dotted option - when line below is exposed, 
+      # and &keys_nested=true is in query, I get Error: JSON::NestingError - nesting of 100 is too deep
+      # results = options[:keys_nested] ? NestedHash.new(results) : results
+    else
+      results = hits["hits"].map do |hit|
+        found = hit.fetch("fields", {})
+        
+        # Unless a query term is also a nested data type, fields requested for a nested_data_type are defined under _source
+        from_source = hit.fetch("_source", {})
+        dotted_from_source = NestedHash.new.withdotkeys(from_source)
+        found = found.merge(dotted_from_source)
+
+        # When an inner query is submitted, the nested data_type fields are under inner_hits
+        inner = hit.fetch("inner_hits", {})
+        delete_set = Set[]
+        
+        delete_set.each { |k| found.delete k }
+        
+        # each result looks like this:
+        # {"city"=>["Springfield"], "address"=>["742 Evergreen Terrace"], "children" => [{...}, {...}, {...}] }
+        found.keys.each { |key| found[key] = found[key].length > 1 ? found[key] : found[key][0] }
+        # now it should look like this:
+        # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace, "children" => [{...}, {...}, {...}]}
+        
+        # re-insert null fields that didn't get returned by ES
+        if query_body[:fields]
+          query_body[:fields].each do |field|
+            if !(found.has_key?(field) || found.has_key?(field.to_s)) && !delete_set.include?(field || field.to_s)
+              found[field] = nil
+            end
+          end
+        end
+
+        # Collect inner hits
+        nested_details_hash = {}
+        if !inner.empty?
+          inner.keys.each do |inn_key|
+            inner_details = inner[inn_key]["hits"]["hits"].map do |nested_obj|
+              details = nested_obj.fetch("_source", {})
+              n_hash = NestedHash.new
+              
+              details.keys.each do |key|
+                n_hash[key] = details[key]
+              end
+              # Convert to dotted keys
+              n_hash = n_hash.withdotkeys
+
+              # If there is a fields filter for nested datatypes, apply it here
+              if !nested_fields_filter.empty?
+                keys_to_keep = nested_fields_filter.select { |f| f.start_with? inn_key }.map do |n|
+                  n.gsub(inn_key + ".","")
+                end
+                n_hash_filtered = n_hash.select { |k| keys_to_keep.include?(k) }
+              end
+
+              !n_hash_filtered.nil? ? n_hash_filtered : n_hash
+            end
+
+            # Set the nested data type string as the key and the array of inner hits as the value
+            nested_details_hash[inn_key] = inner_details
+          end
+        end
+        
+        # If nested hits, combine with other fields in found hash
+        if !nested_details_hash.empty?
+          found = found.merge(nested_details_hash)
+        end
+
+        # If keys_nested option passed in params, then return result keys in nested format
+        # Default setting is to return results with dotted keys
+        found = options[:keys_nested] ? NestedHash.new(found) : found
+
+        found
       end
     end
+
+    results
+  end
+
+  def self.document_data_type(hash, root='')
+    hash.each do |key, value|
+      if value.is_a?(Hash) && value[:type].nil?  # things are nested under this
+        dotted_path = root + key
+        data_type = get_data_type(dotted_path)
+        hash[key] = {
+          type: data_type,
+          properties: value
+        }
+        # need to include nested data-type values in parent document
+        hash[key][:include_in_parent] = true if data_type === 'nested'
+        document_data_type(value, dotted_path + '.')
+      end
+    end
+  end
+
+  def self.get_data_type(dotted_path)
+      default_type = 'object'
+      self.config.es_data_types.each do |key, types|
+        if types.include?(dotted_path)
+          default_type = key
+          break
+        end
+      end
+      default_type
   end
 
   def self.create_index(es_index_name = nil, field_types={})
@@ -178,7 +265,7 @@ module DataMagic
     es_index_name ||= self.config.scoped_index_name
     field_types['location'] = 'lat_lon' # custom lat_lon type maps to geo_point with additional field options
     es_types = NestedHash.new.add(es_field_types(field_types))
-    nested_object_type(es_types)
+    document_data_type(es_types)
     begin
       logger.info "====> creating index with type mapping"
       client.indices.create base_index_hash(es_index_name, es_types)

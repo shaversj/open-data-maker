@@ -52,42 +52,65 @@ describe "DataMagic #search" do
                                               "age" => "70", "height" => "55.2"})
       end
 
-      it "can return a single attribute" do
-        result = DataMagic.search({city: "Springfield"}, fields:[:address])
-        expected["results"] = [
-          {"address" => "1313 Mockingbird Lane"},
-          {"address"=>"742 Evergreen Terrace"},
-        ]
-        expected['metadata']["total"] = 2
-        DataMagic.logger.info "======= EXPECTED: #{expected.inspect}"
-        result["results"] = result["results"].sort_by { |k| k["address"] }
-        expect(result).to eq(expected)
-      end
+      describe "returning attributes with a dictionary" do
+        before(:all) do
+          DataMagic.destroy
+          ENV['DATA_PATH'] = './spec/fixtures/import_with_dictionary'
+          DataMagic.init(load_now: true)
+        end
 
-      it "can return a subset of attributes" do
-        result = DataMagic.search({city: "Springfield"}, fields:[:address, :city])
-        expected["results"] = [
-          {"city"=>"Springfield", "address"=>"1313 Mockingbird Lane"},
-          {"city"=>"Springfield", "address"=>"742 Evergreen Terrace"},
-        ]
-        result["results"] = result["results"].sort_by { |k| k["address"] }
-        expected['metadata']["total"] = 2
-        expect(result).to eq(expected)
+        after(:all) do
+          DataMagic.destroy
+        end
+
+        it "can return a single attribute" do
+          result = DataMagic.search({state: "NY"}, fields:[:population])
+          expected["results"] = [
+            {"population"=>"210565"}, {"population"=>"261310"}, {"population"=>"8175133"}
+          ]
+          expected['metadata']["total"] = 3
+          DataMagic.logger.info "======= EXPECTED: #{expected.inspect}"
+          result["results"] = result["results"].sort_by { |k| k["population"] }
+          expect(result).to eq(expected)
+        end
+
+        it "can return a subset of attributes" do
+          result = DataMagic.search({state: "NY"}, fields:[:population, :state])
+          expected["results"] = [
+            {"state"=>"NY", "population"=>"210565"},
+            {"state"=>"NY", "population"=>"261310"},
+            {"state"=>"NY", "population"=>"8175133"},
+          ]
+          result["results"] = result["results"].sort_by { |k| k["population"] }
+          expected['metadata']["total"] = 3
+          expect(result).to eq(expected)
+        end
       end
 
       describe "supports pagination" do
+        before(:all) do
+          DataMagic.destroy
+          ENV['DATA_PATH'] = './spec/fixtures/import_with_dictionary'
+          DataMagic.init(load_now: true)
+        end
+
+        after(:all) do
+          DataMagic.destroy
+        end
+
+        let(:result_1) { DataMagic.search({ state: "TX" }, page:1, per_page: 3) }
+        let(:result_2) { DataMagic.search({}, page:1) }
+
         it "can specify both page and page size" do
-          result = DataMagic.search({ address: "Lane" }, page:1, per_page: 3)
-          expect(result['metadata']["per_page"]).to eq(3)
-          expect(result['metadata']["page"]).to eq(1)
-          expect(result["results"].length).to eq(1)
+          expect(result_1['metadata']["per_page"]).to eq(3)
+          expect(result_1['metadata']["page"]).to eq(1)
+          expect(result_1["results"].length).to eq(3)
         end
 
         it "can use a default page size" do
-          result = DataMagic.search({}, page:1)
-          expect(result['metadata']["per_page"]).to eq(DataMagic::DEFAULT_PAGE_SIZE)
-          expect(result['metadata']["page"]).to eq(1)
-          expect(result["results"].length).to eq(0)
+          expect(result_2['metadata']["per_page"]).to eq(DataMagic::DEFAULT_PAGE_SIZE)
+          expect(result_2['metadata']["page"]).to eq(1)
+          expect(result_2["results"].length).to eq(20)
         end
       end
     end
@@ -192,16 +215,24 @@ describe "DataMagic #search" do
       expect(result).to eq(expected)
     end
 
-    it "#search with a fields filter can return location.lat and location.lon values" do
-      sf_location = { lat: 37.727239, lon: -123.032229 }
-      DataMagic.logger.debug "sfo_location[:lat] #{sf_location[:lat].class} #{sf_location[:lat].inspect}"
-      response = DataMagic.search({city: "San Francisco"}, {:fields => ["location.lat", "location.lon"]})
-      result = response["results"][0]
-      expect(result.keys.length).to eq(2)
-      expect(result).to include("location.lat")
-      expect(result).to include("location.lat")
-      expect(result["location.lat"]).to eq sf_location[:lat]
-      expect(result["location.lon"]).to eq sf_location[:lon]
+    describe "with dictionary" do
+      before do
+        DataMagic.destroy
+        ENV['DATA_PATH'] = './spec/fixtures/import_with_dictionary'
+        DataMagic.init(load_now: true)
+      end
+
+      it "#search with a fields filter can return location.lat and location.lon values" do
+        chicago_location = { latitude: "41.837551", longitude: "-87.681844" }
+        DataMagic.logger.debug "sfo_location[:latitude] #{chicago_location[:latitude].class} #{chicago_location[:latitude].inspect}"
+        response = DataMagic.search({name: "Chicago"}, {:fields => ["latitude", "longitude"]})
+        result = response["results"][0]
+        expect(result.keys.length).to eq(2)
+        expect(result).to include("latitude")
+        expect(result).to include("latitude")
+        expect(result["latitude"]).to eq chicago_location[:latitude]
+        expect(result["longitude"]).to eq chicago_location[:longitude]
+      end
     end
   end
 
@@ -264,6 +295,54 @@ describe "DataMagic #search" do
         expect(result["2012"]).to include("sat_average")
       end
     end
+  end
 
+  describe "with nested fields in the data" do
+    before :example do
+      ENV['DATA_PATH'] = './spec/fixtures/nested_files'
+      DataMagic.init(load_now: true)
+    end
+
+    after :example do
+      DataMagic.destroy
+    end
+
+
+    context 'when fields param is not passed' do
+      it 'returns data in nested format by default' do
+        response = DataMagic.search({id: "11"})
+        result = response["results"][0]
+
+        expect(result).to include( "2012" => {
+          "earnings" => {
+            "6_yrs_after_entry" => {
+              "median" =>2608,
+              "percent_gt_25k" =>0.92
+            }
+          }, "sat_average" => nil }
+        )
+        expect(result).not_to include("2012.earnings")
+      end
+    end
+
+    context 'when fields param is passed and keys_nested is NOT passed in params' do
+      it 'returns data in dotted key format by default' do
+        response = DataMagic.search({id: "11"}, {:fields => ["2012.sat_average"] })
+        result = response["results"][0]
+
+        expect(result).to include("2012.sat_average")
+        expect(result).not_to include("2012" => {"sat_average" => nil})
+      end
+    end
+
+    context 'when keys_nested=true is in params and fields param is passed' do
+      it 'returns data in nested format' do
+        response = DataMagic.search({id: "11"}, {:keys_nested => true, :fields => ["2012.sat_average"] })
+        result = response["results"][0]
+
+        expect(result).not_to include("2012.sat_average")
+        expect(result).to include("2012" => {"sat_average" => nil})
+      end
+    end
   end
 end

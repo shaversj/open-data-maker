@@ -51,4 +51,16 @@ class NestedHash < Hash
     human_names
   end
 
+  # set a new or existing nested key's value by a dotted-string key
+  def dotkey_set(dottedkey, value, deep_hash = self)
+    keys = dottedkey.to_s.split('.')
+    first = keys.first
+    if keys.length == 1
+      deep_hash[first] = value
+    else
+      # in the case that we are creating a hash from a dotted key, we'll assign a default
+      deep_hash[first] = (deep_hash[first] || {})
+      dotkey_set(keys.slice(1..-1).join('.'), value, deep_hash[first])
+    end
+  end
 end

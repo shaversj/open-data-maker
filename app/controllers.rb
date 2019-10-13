@@ -99,20 +99,66 @@ end
 # see comment in method body
 def get_search_args_from_params(params)
   options = {}
-  %w(metrics sort fields zip distance page per_page debug).each do |opt|
+  %w(metrics sort fields zip distance page per_page debug keys_nested all_programs).each do |opt|
     options[opt.to_sym] = params.delete("_#{opt}")
     # TODO: remove next line to end support for un-prefixed option parameters
     options[opt.to_sym] ||= params.delete(opt)
   end
+  # TODO - Clean up - Looks like there could be some redundancy going on with the next few lines
   options[:endpoint] = params.delete("endpoint")     # these two (or three) params are
   options[:format]   = params.delete("format")       # supplied by Padrino;
+  options[:command]  = params.delete("command")
+  
   params.delete(:format) unless params[:format].nil? # format param duplicated if in url request
 
-  options[:fields]   = (options[:fields]   || "").split(',')
-  options[:command]  = params.delete("command")
+  options[:fields] = check_fields_for_wildcards(options[:fields])
+  
+  options[:keys_nested]  = check_for_valid_key_format_input(options[:keys_nested])  
+  options[:all_programs] = check_for_valid_key_format_input(options[:all_programs])  
 
   options[:metrics] = options[:metrics].split(/\s*,\s*/) if options[:metrics]
   options
+end
+
+def check_for_valid_key_format_input(input_from_params)
+  accepted_true = [true, "true", 1, "1"]
+  accepted_false = [false, "false", 0, "0"]
+
+  accepted = accepted_true + accepted_false
+  if !accepted.include? (input_from_params)
+    nil
+  elsif accepted_true.include? (input_from_params)
+    true
+  else
+    false
+  end
+end
+
+def collectFieldsFromPrefix(field_name)
+  field_name_period = (field_name.end_with? '.') ? field_name : field_name + '.'
+  
+  # Expand 'complete' partial field name to full path(s) (`2014.academics` expands but `2014.acade` will not)
+  DataMagic.config.field_types.select { |key| key.start_with? field_name_period }
+end
+
+def check_fields_for_wildcards(fields_from_params)
+  split_fields_params = ( fields_from_params || '').split(',')
+  fields = []
+
+  split_fields_params.each do |field_name|
+      if DataMagic.config.field_type(field_name)
+        fields.push(field_name)
+      else
+        matches = collectFieldsFromPrefix(field_name)
+        if matches.empty?
+          # Let Error Checker catch this
+          fields.push(field_name)
+          next
+        end
+        matches.each_key {|k| fields.push(k) }
+      end
+  end
+  fields
 end
 
 def output_data_as_csv(results)
