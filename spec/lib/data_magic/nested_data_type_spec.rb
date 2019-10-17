@@ -62,6 +62,35 @@ describe DataMagic::QueryBuilder do
 
       it_correctly "builds a query"
     end
+
+    context "in presence of all_programs_nested param" do
+      subject {{ "2016.programs.cip_4_digit" => "1312" }}
+      let(:options) {{ :all_programs_nested => true, :fields => ["2016.programs.cip_4_digit.earnings.median_earnings"] }}
+
+      let(:expected_query) { 
+        { bool: { filter: {
+            nested: {
+                inner_hits: {},
+                path: "2016.programs.cip_4_digit",
+                query: {
+                    bool: {
+                        must: [{
+                            match: { "2016.programs.cip_4_digit" => "1312" }
+                        }]
+                    }
+                }
+            }
+        } } } 
+      }
+      let(:nested_meta) {{
+        post_es_response: {:nested_fields_filter=>["2016.programs.cip_4_digit.earnings.median_earnings"]},
+        from: 0,
+        size: 20,
+        _source: ["2016.programs.cip_4_digit.earnings.median_earnings"]
+      }}
+
+      it_correctly "builds a query"
+    end
   end
 
   describe "builds queries that correctly handle fields in params" do

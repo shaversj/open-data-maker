@@ -24,7 +24,11 @@ module DataMagic
         nested_query_pairs = term_pairs[:nested_query_pairs]
         query_pairs        = term_pairs[:query_pairs]
 
-        all_programs = options[:all_programs]
+        all_programs_nested = options[:all_programs_nested]
+        if !all_programs_nested && options[:all_programs]
+          all_programs = options[:all_programs]
+        end 
+
         # Use stretchy to build query
         if all_programs
           # Treat all query fields as standard data types, rather than nested datatypes
@@ -61,10 +65,10 @@ module DataMagic
           query_hash.merge! add_aggregations(params, options, config)
         end
 
-        query_hash = set_query_source(query_hash, nested_query, nested_fields, query_fields)
+        query_hash = set_query_source(query_hash, nested_query, nested_fields, query_fields, all_programs_nested)
 
         query_hash[:sort] = get_sort_order(options[:sort], config) if options[:sort] && !options[:sort].empty?
-
+        
         query_hash
       end
 
@@ -389,21 +393,23 @@ module DataMagic
         squery
       end
 
-      def set_query_source(query_hash, nested_query, nested_fields, query_fields)
+      def set_query_source(query_hash, nested_query, nested_fields, query_fields, all_programs_nested)
         # The distinction between nested datatype query vs non-nested datatype query refers 
         # to the datatype of the field that must be matched.
 
         # The distinction between nested_fields vs query_fields refers to the fields returned in the response. The
         # response fields come from different sources depending on the query.
         
-        # if there is a nested_query OR if there are non-nested query_fields AND no nested fields
-        if nested_query || (!query_fields.empty? && nested_fields.empty?)
+        # if there is a nested_query && the all_programs_nested is not true
+        # OR if there are non-nested query_fields AND no nested fields
+        if nested_query && !all_programs_nested || (!query_fields.empty? && nested_fields.empty?)
           query_hash[:_source] = false
         
         # if this is NOT a nested_query AND there are nested fields, then filter source on those fields
-        elsif !nested_query && !nested_fields.empty?
+        # OR if the query includes a nested query AND the all_programs_nested option is passed
+        elsif !nested_query && !nested_fields.empty? || (nested_query && all_programs_nested)
           query_hash[:_source] = nested_fields
-        
+
         # if neither fields, nor a source filter, then exclude fields from source beginning with underscores
         else
           query_hash[:_source] = { exclude: ["_*"] }
