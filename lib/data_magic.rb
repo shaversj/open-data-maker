@@ -151,10 +151,10 @@ module DataMagic
     nested_fields_filter = result_processing_info[:nested_fields_filter] ? result_processing_info[:nested_fields_filter] : []
     all_programs_nested = options[:all_programs_nested]
     
-    if query_body.dig(:_source).class == Hash
+    if query_body.dig(:_source) == { exclude: ["_*"] }
       # we're getting the whole document and we can find in _source
       results = hits["hits"].map {|hit| hit["_source"]}
-      
+
       # Tested - implementation of nested vs dotted option - when line below is exposed, 
       # and &keys_nested=true is in query, I get Error: JSON::NestingError - nesting of 100 is too deep
       # results = options[:keys_nested] ? NestedHash.new(results) : results
