@@ -160,10 +160,29 @@ module DataMagic
       # results = options[:keys_nested] ? NestedHash.new(results) : results
     elsif all_programs_nested
       results = hits["hits"].map do |hit|
-        from_source = hit["_source"]
         from_fields = hit.fetch("fields", {})
+        from_source = hit.fetch("_source", {})
+        dotted_from_source = NestedHash.new.withdotkeys(from_source)
 
-        from_fields.merge(from_source)
+        all_data = from_fields.merge(dotted_from_source)
+        
+        delete_set = Set[]
+        delete_set.each { |k| all_data.delete k }
+
+        all_data.keys.each { |key| all_data[key] = all_data[key].length > 1 ? all_data[key] : all_data[key][0] }
+
+        # re-insert null fields that didn't get returned by ES
+        if query_body[:fields]
+          query_body[:fields].each do |field|
+            if !(all_data.has_key?(field) || all_data.has_key?(field.to_s)) && !delete_set.include?(field || field.to_s)
+              all_data[field] = nil
+            end
+          end
+        end
+
+        found = options[:keys_nested] ? NestedHash.new(all_data) : all_data
+
+        found
       end
     else
       results = hits["hits"].map do |hit|
@@ -176,16 +195,16 @@ module DataMagic
 
         # When an inner query is submitted, the nested data_type fields are under inner_hits
         inner = hit.fetch("inner_hits", {})
+        
         delete_set = Set[]
-        
         delete_set.each { |k| found.delete k }
-        
+
         # each result looks like this:
         # {"city"=>["Springfield"], "address"=>["742 Evergreen Terrace"], "children" => [{...}, {...}, {...}] }
         found.keys.each { |key| found[key] = found[key].length > 1 ? found[key] : found[key][0] }
         # now it should look like this:
         # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace, "children" => [{...}, {...}, {...}]}
-        
+
         # re-insert null fields that didn't get returned by ES
         if query_body[:fields]
           query_body[:fields].each do |field|
@@ -224,7 +243,7 @@ module DataMagic
             nested_details_hash[inn_key] = inner_details
           end
         end
-        
+
         # If nested hits, combine with other fields in found hash
         if !nested_details_hash.empty?
           found = found.merge(nested_details_hash)
