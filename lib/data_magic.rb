@@ -158,32 +158,6 @@ module DataMagic
       # Tested - implementation of nested vs dotted option - when line below is exposed, 
       # and &keys_nested=true is in query, I get Error: JSON::NestingError - nesting of 100 is too deep
       # results = options[:keys_nested] ? NestedHash.new(results) : results
-    elsif all_programs_nested
-      results = hits["hits"].map do |hit|
-        from_fields = hit.fetch("fields", {})
-        from_source = hit.fetch("_source", {})
-        dotted_from_source = NestedHash.new.withdotkeys(from_source)
-
-        all_data = from_fields.merge(dotted_from_source)
-        
-        delete_set = Set[]
-        delete_set.each { |k| all_data.delete k }
-
-        all_data.keys.each { |key| all_data[key] = all_data[key].length > 1 ? all_data[key] : all_data[key][0] }
-
-        # re-insert null fields that didn't get returned by ES
-        if query_body[:fields]
-          query_body[:fields].each do |field|
-            if !(all_data.has_key?(field) || all_data.has_key?(field.to_s)) && !delete_set.include?(field || field.to_s)
-              all_data[field] = nil
-            end
-          end
-        end
-
-        found = options[:keys_nested] ? NestedHash.new(all_data) : all_data
-
-        found
-      end
     else
       results = hits["hits"].map do |hit|
         found = hit.fetch("fields", {})
@@ -192,18 +166,11 @@ module DataMagic
         from_source = hit.fetch("_source", {})
         dotted_from_source = NestedHash.new.withdotkeys(from_source)
         found = found.merge(dotted_from_source)
-
-        # When an inner query is submitted, the nested data_type fields are under inner_hits
-        inner = hit.fetch("inner_hits", {})
         
         delete_set = Set[]
         delete_set.each { |k| found.delete k }
 
-        # each result looks like this:
-        # {"city"=>["Springfield"], "address"=>["742 Evergreen Terrace"], "children" => [{...}, {...}, {...}] }
-        found.keys.each { |key| found[key] = found[key].length > 1 ? found[key] : found[key][0] }
-        # now it should look like this:
-        # {"city"=>"Springfield", "address"=>"742 Evergreen Terrace, "children" => [{...}, {...}, {...}]}
+        found = transform_array_values(found)
 
         # re-insert null fields that didn't get returned by ES
         if query_body[:fields]
@@ -214,40 +181,13 @@ module DataMagic
           end
         end
 
-        # Collect inner hits
-        nested_details_hash = {}
-        if !inner.empty?
-          inner.keys.each do |inn_key|
-            inner_details = inner[inn_key]["hits"]["hits"].map do |nested_obj|
-              details = nested_obj.fetch("_source", {})
-              n_hash = NestedHash.new
-              
-              details.keys.each do |key|
-                n_hash[key] = details[key]
-              end
-              # Convert to dotted keys
-              n_hash = n_hash.withdotkeys
+        # When an inner query is submitted, the nested data_type fields are under inner_hits
+        inner = hit.fetch("inner_hits", {})
 
-              # If there is a fields filter for nested datatypes, apply it here
-              if !nested_fields_filter.empty?
-                keys_to_keep = nested_fields_filter.select { |f| f.start_with? inn_key }.map do |n|
-                  n.gsub(inn_key + ".","")
-                end
-                n_hash_filtered = n_hash.select { |k| keys_to_keep.include?(k) }
-              end
-
-              !n_hash_filtered.nil? ? n_hash_filtered : n_hash
-            end
-
-            # Set the nested data type string as the key and the array of inner hits as the value
-            nested_details_hash[inn_key] = inner_details
-          end
+        if !all_programs_nested && !inner.empty?
+          found = collect_inner_hits(inner, found, nested_fields_filter)
         end
 
-        # If nested hits, combine with other fields in found hash
-        if !nested_details_hash.empty?
-          found = found.merge(nested_details_hash)
-        end
 
         # If keys_nested option passed in params, then return result keys in nested format
         # Default setting is to return results with dotted keys
@@ -258,6 +198,62 @@ module DataMagic
     end
 
     results
+  end
+
+  def self.transform_array_values(found)
+    # each result looks like this:
+    # {
+    #   "city"=>["Springfield"], 
+    #   "address"=>["742 Evergreen Terrace"], 
+    #   "children" => [{...}, {...}, {...}] 
+    # }
+    found.keys.each do |key|
+      found[key] = found[key].length > 1 ? found[key] : found[key][0]
+    end
+    # {
+    #   "city"=>"Springfield", 
+    #   "address"=>"742 Evergreen Terrace", 
+    #   "children" => [{...}, {...}, {...}] 
+    # }
+
+    found
+  end
+
+  def self.collect_inner_hits(inner, found, nested_fields_filter)
+    nested_details_hash = {}
+
+    inner.keys.each do |inn_key|
+      inner_details = inner[inn_key]["hits"]["hits"].map do |nested_obj|
+        details = nested_obj.fetch("_source", {})
+        n_hash = NestedHash.new
+        
+        details.keys.each do |key|
+          n_hash[key] = details[key]
+        end
+        # Convert to dotted keys
+        n_hash = n_hash.withdotkeys
+
+        # If there is a fields filter for nested datatypes, apply it here
+        if !nested_fields_filter.empty?
+          keys_to_keep = nested_fields_filter.select { |f| f.start_with? inn_key }.map do |n|
+            n.gsub(inn_key + ".","")
+          end
+          n_hash_filtered = n_hash.select { |k| keys_to_keep.include?(k) }
+        end
+
+        !n_hash_filtered.nil? ? n_hash_filtered : n_hash
+      end
+
+      # Set the nested data type string as the key and the array of inner hits as the value
+      nested_details_hash[inn_key] = inner_details
+    end
+
+    # If nested hits, combine with other fields in found hash
+    if !nested_details_hash.empty?
+      found = found.merge(nested_details_hash)
+    end
+
+    found
   end
 
   def self.document_data_type(hash, root='')
