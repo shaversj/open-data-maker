@@ -188,7 +188,6 @@ module DataMagic
           found = collect_inner_hits(inner, found, nested_fields_filter)
         end
 
-
         # If keys_nested option passed in params, then return result keys in nested format
         # Default setting is to return results with dotted keys
         found = options[:keys_nested] ? NestedHash.new(found) : found
@@ -200,6 +199,14 @@ module DataMagic
     results
   end
 
+  def self.field_type_nested?(field_name)
+    nested_datatypes = DataMagic.config.es_data_types["nested"]
+
+    if nested_datatypes
+      nested_datatypes.any? {|nested| field_name.start_with? nested }
+    end
+  end
+
   def self.transform_array_values(found)
     # each result looks like this:
     # {
@@ -208,8 +215,16 @@ module DataMagic
     #   "children" => [{...}, {...}, {...}] 
     # }
     found.keys.each do |key|
-      found[key] = found[key].length > 1 ? found[key] : found[key][0]
+      nested_data_type = field_type_nested?(key)
+      
+      # Keep nested datatypes in an array, even when there is just one program
+      if !nested_data_type && found[key].length <= 1
+        found[key] = found[key][0]
+      else
+        found[key] = found[key]
+      end
     end
+    # Now, it looks like the following....
     # {
     #   "city"=>"Springfield", 
     #   "address"=>"742 Evergreen Terrace", 
