@@ -21,6 +21,12 @@ dictionary:
     type: autocomplete
     description: City
 
+  programs.cip_4_digit.code:
+    source: CIPCODE
+    type: integer
+    map: program
+    description: Classification of Instructional Programs (CIP) code for the field of study
+
 shared_config: &shared_config
   contents:
   - earnings

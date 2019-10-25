@@ -1,8 +1,15 @@
 module DataMagic
   module QueryBuilder
     class << self
+      @@dictionary ||= {}
+
+      def set_dictionary(config)
+        @@dictionary = config.dictionary
+      end 
+
       # Creates query from parameters passed into endpoint and returns a Hash
       def from_params(params, options, config)
+        set_dictionary(config)
         per_page = (options[:per_page] || config.page_size || DataMagic::DEFAULT_PAGE_SIZE).to_i
         page = options[:page].to_i || 0
         per_page = DataMagic::MAX_PAGE_SIZE if per_page > DataMagic::MAX_PAGE_SIZE
@@ -42,7 +49,7 @@ module DataMagic
         nested_query = false
         if !all_programs && !nested_query_pairs.empty?
           nested_query = true
-          
+
           if query_pairs.empty?
             build_query_from_nested_datatypes(nested_query_pairs, query_hash)
           else
@@ -118,9 +125,21 @@ module DataMagic
 
       def determine_query_term_datatypes(params)
         nested_terms = params.keys.select { |key| field_type_nested?(key) }
-        
         nested_query_pairs = {}
-        nested_terms.each { |key| nested_query_pairs[key] = params[key] }
+
+        nested_terms.each do |key|
+          split_key_terms = key.split(".")
+          nested, *standard_fields = split_key_terms
+          dotted_field = standard_fields.join(".")
+          field_type = @@dictionary[dotted_field]["type"]
+
+          value = params[key]
+
+          if field_type == "integer" && value.is_a?(String) && /,/.match(value) # list of integers
+            value = value.split(',').map(&:to_i)
+          end
+          nested_query_pairs[key] = value
+        end
 
         if !nested_terms.empty?
           nested_terms.each do |key|
@@ -193,13 +212,13 @@ module DataMagic
 
         paths = Set[]
         paths_and_terms.each { |hash| paths.add(hash[:path]) }
-
+        
         if paths.length == 1
           path         = paths.to_a[0]
           terms        = paths_and_terms.map { |item| item[:term] }
           nested_query = get_inner_nested_query(path, terms)
         end
-
+        
         nested_query
       end
 

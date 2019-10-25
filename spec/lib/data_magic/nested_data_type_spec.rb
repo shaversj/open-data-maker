@@ -34,7 +34,7 @@ describe DataMagic::QueryBuilder do
 
   describe "builds queries based on nested datatype fields" do
     context "in absence of all_programs param" do
-      subject { { "2016.programs.cip_4_digit" => "1312" } }
+      subject { { "2016.programs.cip_4_digit.code" => "1312" } }
       let(:expected_query) { 
           { bool: { filter: {
               nested: {
@@ -43,7 +43,7 @@ describe DataMagic::QueryBuilder do
                   query: {
                       bool: {
                           must: [{
-                              match: { "2016.programs.cip_4_digit" => "1312" }
+                              match: { "2016.programs.cip_4_digit.code" => "1312" }
                           }]
                       }
                   }
@@ -54,18 +54,18 @@ describe DataMagic::QueryBuilder do
     end
 
     context "in presence of all_programs param" do
-      subject {{ "2016.programs.cip_4_digit" => "1312" }}
+      subject {{ "2016.programs.cip_4_digit.code" => "1312" }}
       let(:options) {{ :all_programs => true }}
 
-      let(:expected_query) {{ match: { "2016.programs.cip_4_digit" => "1312" }} }
+      let(:expected_query) {{ match: { "2016.programs.cip_4_digit.code" => "1312" }} }
       let(:nested_meta)    {{ post_es_response: {}, from: 0, size: 20, _source: {:exclude=>["_*"]} } }
 
       it_correctly "builds a query"
     end
 
     context "in presence of all_programs_nested param" do
-      subject {{ "2016.programs.cip_4_digit" => "1312" }}
-      let(:options) {{ :all_programs_nested => true, :fields => ["2016.programs.cip_4_digit.earnings.median_earnings"] }}
+      subject {{ "2016.programs.cip_4_digit.code" => "1312" }}
+      let(:options) {{ :all_programs_nested => true, :fields => ["2016.programs.cip_4_digit.code.earnings.median_earnings"] }}
 
       let(:expected_query) { 
         { bool: { filter: {
@@ -75,7 +75,7 @@ describe DataMagic::QueryBuilder do
                 query: {
                     bool: {
                         must: [{
-                            match: { "2016.programs.cip_4_digit" => "1312" }
+                            match: { "2016.programs.cip_4_digit.code" => "1312" }
                         }]
                     }
                 }
@@ -83,10 +83,10 @@ describe DataMagic::QueryBuilder do
         } } } 
       }
       let(:nested_meta) {{
-        post_es_response: {:nested_fields_filter=>["2016.programs.cip_4_digit.earnings.median_earnings"]},
+        post_es_response: {:nested_fields_filter=>["2016.programs.cip_4_digit.code.earnings.median_earnings"]},
         from: 0,
         size: 20,
-        _source: ["2016.programs.cip_4_digit.earnings.median_earnings"]
+        _source: ["2016.programs.cip_4_digit.code.earnings.median_earnings"]
       }}
 
       it_correctly "builds a query"
@@ -123,7 +123,7 @@ describe DataMagic::QueryBuilder do
     context "only nested datatype fields are passed in params" do
       context "the query is NOT a nested query type" do
         subject {{}}
-        let(:fields_in_params) { ["2016.programs.cip_4_digit.code"] }
+        let(:fields_in_params) { ["2016.programs.cip_4_digit.code.code"] }
         let(:options) {{ :fields => fields_in_params }}
 
         it "assigns the fields to _source" do
@@ -136,8 +136,8 @@ describe DataMagic::QueryBuilder do
       end
 
       context "the query is a nested query type" do
-        subject {{ "2016.programs.cip_4_digit" => "1312" }}
-        let(:fields_in_params) { ["2016.programs.cip_4_digit.code"] }
+        subject {{ "2016.programs.cip_4_digit.code" => "1312" }}
+        let(:fields_in_params) { ["2016.programs.cip_4_digit.code.code"] }
         let(:options) {{ :fields => fields_in_params }}
         let(:source_value) { false }
 
