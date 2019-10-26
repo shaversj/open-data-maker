@@ -93,6 +93,26 @@ describe DataMagic::QueryBuilder do
     end
   end
 
+
+  describe "builds nested filter queries for terms that accept an array of values" do
+    context "for a single nested datatype query term" do
+      subject { { "2016.programs.cip_4_digit.credential.level" => "[2,3,5]" } }
+      let(:expected_query) { 
+          { bool: { filter: {
+              nested: {
+                  inner_hits: {},
+                  path: "2016.programs.cip_4_digit",
+                  filter: [
+                    { "terms": { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} }
+                  ]
+              }
+          } } } 
+      }
+      it_correctly "builds a query"
+    end
+
+  end
+
   describe "builds queries that correctly handle fields in params" do
     context "no fields are passed in the params" do
       subject {{}}
