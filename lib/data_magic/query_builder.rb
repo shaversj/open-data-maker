@@ -131,7 +131,7 @@ module DataMagic
           split_key_terms = key.split(".")
           nested, *standard_fields = split_key_terms
           dotted_field = standard_fields.join(".")
-          
+
           field_type = @@dictionary[dotted_field]["type"]
           value = params[key]
 
@@ -196,7 +196,7 @@ module DataMagic
           end
           range_query = key.include?("__range")
           or_query = value.is_a? Array
-          
+
           use_filter_key = false
           if range_query
             query_term = get_nested_range_query(key, value)
@@ -212,20 +212,44 @@ module DataMagic
             use_filter_key: use_filter_key
           })
         end
-        paths_and_terms
+
+        build_filter_query = paths_and_terms.any? do |item|
+          item[:use_filter_key]
+        end
+
+        paths_and_terms_cleaned_up = paths_and_terms.map do |p_and_t|
+          {
+            path: p_and_t[:path],
+            term: p_and_t[:term]
+          }
+        end
+
+        query_info = {
+          paths_and_terms: paths_and_terms_cleaned_up,
+          build_filter_query: build_filter_query
+        }
+
+        query_info
       end
 
       def build_nested_query(nested_query_pairs)
-        paths_and_terms = sort_nested_query_paths_and_terms(nested_query_pairs)
+        query_info = sort_nested_query_paths_and_terms(nested_query_pairs)
+        paths_and_terms = query_info[:paths_and_terms]
+        build_filter_query = query_info[:build_filter_query]
 
         paths = Set[]
         paths_and_terms.each { |hash| paths.add(hash[:path]) }
-        
+
+        term_keys = Set[]
+        paths_and_terms.each { |hash| term_keys.add(hash[:term].keys.first) }
+
         if paths.length == 1
           path        = paths.to_a[0]
           terms       = paths_and_terms.map { |item| item[:term] }
-          use_filter_key = paths_and_terms[0][:use_filter_key]
-          if use_filter_key
+
+          if term_keys.length > 1
+            nested_query = get_nested_query_bool_filter_query(path, terms)
+          elsif term_keys.length == 1 && build_filter_query
             nested_query = get_inner_nested_filter_query(path, terms)
           else
             nested_query = get_inner_nested_query(path, terms)
@@ -233,6 +257,20 @@ module DataMagic
         end
 
         nested_query
+      end
+
+      def get_nested_query_bool_filter_query(path, terms)
+        { 
+          nested: {
+            path: path,
+            query: {
+              bool: {
+                filter: terms
+              }
+            },
+            inner_hits: {}
+          }
+        }
       end
 
       def get_outer_nested_query(inner_queries)

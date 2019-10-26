@@ -32,7 +32,7 @@ describe DataMagic::QueryBuilder do
     end
   end
 
-  describe "builds queries based on nested datatype fields" do
+  describe "builds queries with on nested datatype fields depending on options passed" do
     context "in absence of all_programs param" do
       subject { { "2016.programs.cip_4_digit.code" => "1312" } }
       let(:expected_query) { 
@@ -93,6 +93,94 @@ describe DataMagic::QueryBuilder do
     end
   end
 
+  describe "builds correct nested query objects depending on terms passed" do
+    context "for a single nested datatype query that takes an array of values" do
+      subject { { "2016.programs.cip_4_digit.credential.level" => "[2,3,5]" } }
+      let(:expected_query) { 
+          { bool: { filter: {
+              nested: {
+                  inner_hits: {},
+                  path: "2016.programs.cip_4_digit",
+                  filter: [
+                    { "terms": { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} }
+                  ]
+              }
+          } } } 
+      }
+      it_correctly "builds a query"
+    end
+
+    context "when more than one terms and each term has a single value" do
+      subject { { 
+        "2016.programs.cip_4_digit.code" => "1312",
+        "2016.programs.cip_4_digit.credential.level" => "2",
+      } }
+      let(:expected_query) { 
+          { bool: { filter: {
+              nested: {
+                  inner_hits: {},
+                  path: "2016.programs.cip_4_digit",
+                  query: {
+                      bool: {
+                          must: [
+                            { match: { "2016.programs.cip_4_digit.code" => "1312" }},
+                            { match: { "2016.programs.cip_4_digit.credential.level" => "2" }}
+                          ]
+                      }
+                  }
+              }
+          } } } 
+      }
+      it_correctly "builds a query"
+      
+    end
+
+    context "when more than one term and each term takes an array of values" do
+      subject { { 
+        "2016.programs.cip_4_digit.credential.level" => "[2,3,5]",
+        "2016.programs.cip_4_digit.code" => "[1312,4004]",
+      } }
+      let(:expected_query) { 
+          { bool: { filter: {
+              nested: {
+                  inner_hits: {},
+                  path: "2016.programs.cip_4_digit",
+                  filter: [
+                    { "terms": { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} },
+                    { "terms": { "2016.programs.cip_4_digit.code" => [1312,4004]} }
+                  ]
+              }
+          } } } 
+      }
+      it_correctly "builds a query"
+    end
+
+    context "when one term has an array of values and the other has a single value" do
+      subject { { 
+        "2016.programs.cip_4_digit.credential.level" => "[2,3,5]",
+        "2016.programs.cip_4_digit.code" => "1312"
+      } }
+      let(:expected_query) { 
+        { bool: { filter: {
+            nested: {
+              inner_hits: {},
+              path: "2016.programs.cip_4_digit",
+              query: {
+                bool: {
+                  filter: [
+                    { terms: { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} },
+                    { match: { "2016.programs.cip_4_digit.code" => "1312" }}
+                  ]
+                }
+              }
+            }
+        } } } 
+      }
+      it_correctly "builds a query"
+      
+    end
+  end
+
 
   describe "builds nested filter queries for terms that accept an array of values" do
     context "for a single nested datatype query term" do
@@ -110,7 +198,6 @@ describe DataMagic::QueryBuilder do
       }
       it_correctly "builds a query"
     end
-
   end
 
   describe "builds queries that correctly handle fields in params" do
