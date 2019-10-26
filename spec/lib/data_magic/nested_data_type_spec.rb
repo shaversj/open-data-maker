@@ -244,7 +244,7 @@ describe DataMagic::QueryBuilder do
 
       context "the query is a nested query type" do
         subject {{ "2016.programs.cip_4_digit.code" => "1312" }}
-        let(:fields_in_params) { ["2016.programs.cip_4_digit.code.code"] }
+        let(:fields_in_params) { ["2016.programs.cip_4_digit.code"] }
         let(:options) {{ :fields => fields_in_params }}
         let(:source_value) { false }
 
