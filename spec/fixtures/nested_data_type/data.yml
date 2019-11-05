@@ -20,6 +20,25 @@ dictionary:
     source: CITY
     type: autocomplete
     description: City
+  programs.cip_4_digit.code:
+    source: CIPCODE
+    type: integer
+    map: program
+    description: Classification of Instructional Programs (CIP) code for the field of study
+  programs.cip_4_digit.credential.level:
+    source: CREDLEV
+    type: integer
+    map: program
+    descripton: "Level of credential
+      Credentials are categorized into the following levels:
+      1: Undergraduate Certificate or Diploma
+      2: Associate's Degree
+      3: Bachelor's Degree
+      4: Post-baccalaureate Certificate
+      5: Master's Degree
+      6: Doctoral Degree
+      7: First Professional Degree
+      8: Graduate/Professional Certificate"
 
 shared_config: &shared_config
   contents:
