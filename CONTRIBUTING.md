@@ -1,7 +1,7 @@
 ## Contributing
 
 We aspire to create a welcoming environment for collaboration on this project.
-To that end, we follow the [18F Code of Conduct](https://github.com/18F/code-of-conduct/blob/master/code-of-conduct.md) and ask that all contributors do the same.
+
 
 ### Public domain
 
@@ -15,11 +15,7 @@ with this waiver of copyright interest.
 
 ## Communication
 
-There are a few ways to communicate with other folks working on this project:
-
-* For general questions, discussion and announcements, please join [Google Group]
-* For noisy, informal chatter, you can join us on the [open-data-maker-pub Slack Channel](https://chat.18f.gov).  Notifications from github are posted here.
-* For bug reports, please [file an issue](https://github.com/18F/open-data-maker/issues).
+For bug reports, please [file an issue](https://github.com/18F/open-data-maker/issues).
 
 ## About the Tech
 
@@ -46,7 +42,7 @@ This project follows the [git flow](http://nvie.com/posts/a-successful-git-branc
 for review by our design and product folks, then to master.  
 
 This project is in alpha, so things are fast moving! We hope you consider it
-a fun time to get involved.  In the near term, we have a very specific focus for this app, but we expect it will be generally useful for other projects as well.  If you are thinking about deploying this app at your agency or organization, please let us know by introducing yourself in the [Google Group] and telling us a bit about your project or idea. 
+a fun time to get involved.  In the near term, we have a very specific focus for this app, but we expect it will be generally useful for other projects as well. 
 
 ### Testing
 
@@ -98,7 +94,7 @@ chances of your issue being dealt with quickly:
 ### Submitting a Pull Request
 Before you submit your pull request consider the following guidelines:
 
-* Search [GitHub](https://github.com/18F/open-data-maker/pulls) for an open or closed Pull Request that relates to your submission. You don't want to duplicate effort.
+* Search [GitHub](https://github.com/RTICWDT/open-data-maker/pulls) for an open or closed Pull Request that relates to your submission. You don't want to duplicate effort.
 * Make your changes in a new git branch
 
      ```shell
@@ -137,37 +133,7 @@ That's it! Thank you for your contribution!
 
 #### After your pull request is merged
 
-After your pull request is merged, you can safely delete your branch and pull the changes from the main (upstream) repository:
-
-* Check out the dev branch:
-
-    ```shell
-    git checkout dev -f
-    ```
-
-* Delete the local branch:
-
-    ```shell
-    git branch -D dev-my-fix
-    ```
-
-* Update with the latest upstream version:
-
-    ```shell
-    git pull --ff upstream dev
-    ```
-  Note: this assumes that you have already added the `upstream` remote repository, using this command:
-
-    ```shell
-    git remote add upstream https://github.com/18F/open-data-maker.git
-    ```
-
-
-* For folks with write access to the repo: delete the remote branch on GitHub either through the GitHub web UI or your local shell as follows:
-
-    ```shell
-    git push origin --dev-my-fix
-    ```
+After your pull request is merged, you can safely delete your branch and pull the changes from the main (upstream) repository
 
 ### Reviewing Pull Requests
 
@@ -183,5 +149,3 @@ someone has looked at it. For larger commits, we like to have a +1 from someone
 else on the core team and/or from other contributor(s). Please note if you
 reviewed the code or tested locally -- a +1 by itself will typically be
 interpreted as your thinking its a good idea, but not having reviewed in detail.
-
-[Google Group]: https://groups.google.com/d/forum/open-data-maker

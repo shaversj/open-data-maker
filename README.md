@@ -84,21 +84,6 @@ options:
 ```
 
 
-
-## Help Wanted
-
-1. Try out importing multiple data sets with different endpoints and data.yaml configuration
-2. Take a look at our [open issues](https://github.com/18F/open-data-maker/issues) and our [Contribution Guide](CONTRIBUTING.md)
-
-## More Info
-
-Here's how it might look in the future:
-
-![overview of data types, prompt to download data, create a custom data set, or look at API docs](/doc/data-overview.png)
-
-
-![Download all the data or make choices to create a csv with a subset](/doc/csv-download.png)
-
 ### Acknowledgements
 Zipcode latitude and longitude provided by [GeoNames](http://www.geonames.org/) under under a [Creative Commons Attribution 3.0 License](http://creativecommons.org/licenses/by/3.0/).
 

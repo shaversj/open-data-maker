@@ -19,22 +19,14 @@ To run Open Data Maker, you will need to have the following software installed o
 * [Elasticsearch] 1.7.3
 * [Ruby] 2.2.2
 
-**NOTE: Open Data Maker does not currently work with Elasticsearch versions 2.x and above.**
-You can follow or assist our progress towards 2.x compatibility [at this GitHub issue](https://github.com/18F/open-data-maker/issues/248).
+**NOTE: Open Data Maker indexing currently is very slow on ES2.x, however, an index created on 1.x can be restored to 2.x.
 
 ### Mac OS X
 
-On a Mac, we recommend installing Ruby 2.2.2 via [RVM], and Elasticsearch 1.7.3 via
-[Homebrew].  If you don't want to use the bootstrap script above, you can install
-elasticsearch 1.7 with brew using the following command:
-
-```
-brew install elasticsearch17
-```
+On a Mac, we recommend installing [RVM].
 
 If you are contributing to development, you will also need [Git].
-If you don't already have these tools, the 18F [laptop] script will install
-them for you.
+
 
 ## Get the Source Code
 
@@ -47,14 +39,6 @@ cd open-data-maker
 ```
 
 ## Run the App
-
-### Make sure Elasticsearch is up and running
-If you just ran `script/bootstrap`, then Elasticsearch should already be
-running. But if you stopped it or restarted your computer, you'll need to
-start it back up. Assuming you installed Elasticsearch via our `bootstrap`
-script, you can restart it with this command:
-
-```brew services restart elasticsearch```
 
 
 ### Import the data
@@ -116,19 +100,17 @@ rake es:delete[_all]
 The data directory can optionally include a file called `data.yaml` (see [the sample one](sample-data/data.yaml) for its schema) that references one or more `.csv` files and specifies data types,
 field name mapping, and other support data.
 
-## Experimental web UI for indexing
 
-Optionally, you can enable indexing from webapp, but this option is still experimental:
-* `export INDEX_APP=enable`
-* in your browser, go to /index/reindex
+## Debugging
 
-the old index (if present) will be deleted and re-created from source files at DATA_PATH.
+`ES_DEBUG` environment variable will turn on verbose tracer in the Elasticsearch client
+
+optional performance profiling for rake import: `rake import[profile=true]`
+
 
 ## Want to help?
 
 See [Contribution Guide](CONTRIBUTING.md)
-
-Read additional [implementation notes](NOTES.md)
 
 [Elasticsearch]: https://www.elastic.co/products/elasticsearch
 [Homebrew]: http://brew.sh/
@@ -136,4 +118,6 @@ Read additional [implementation notes](NOTES.md)
 [rbenv]: https://github.com/sstephenson/rbenv
 [Ruby]: https://www.ruby-lang.org/en/
 [Git]: https://git-scm.com/
-[laptop]: https://github.com/18F/laptop
+
+
+

@@ -21,21 +21,19 @@ Each query is expressed as a URL, containing:
  * The **API Version String**. Currently the only supported version string is: `v1`
  * The **Endpoint** representing a particular dataset, e.g. `schools`. Endpoint
  names are usually plural.
- * The **Format** for the result data. The default output format is JSON ([JavaScript Object Notation](http://json.org/)); CSV is
- also available.
+
  * The **Query String** containing a set of named key-value pairs that
  represent the query, which incude
    * **Field Parameters**, specifying a value (or set of values) to match
    against a particular field, and
-   * **Option Parameters**, which affect the filtering and output of the
-   entire query. Option Parameter names are prefixed with an underscore (`_`).
+
 
 ### Query Example
 
 Here's an example query URL:
 
 ```
-https://api.data.gov/ed/collegescorecard/v1/schools.json?school.degrees_awarded.predominant=2,3&_fields=id,school.name,2013.student.size
+https://api.data.gov/ed/collegescorecard/v1/schools.json?school.degrees_awarded.predominant=2,3&fields=id,school.name,2013.student.size
 ```
 
 In this query URL:
@@ -134,7 +132,7 @@ When failing to execute a query, Open Data Maker will attempt to return a JSON e
 
 ## Field Parameters
 
-Parameter names _without_ an underscore prefix are assumed to be field names in the dataset. Supplying a value to a field parameter acts as a query filter, and only returns records where the given field exactly matches the given value.
+Parameter names are assumed to be field names in the dataset. Supplying a value to a field parameter acts as a query filter, and only returns records where the given field exactly matches the given value.
 
 For example: Use the parameter `school.region_id=6` to only fetch records with a `school.region_id` value of `6`.
 
@@ -176,7 +174,6 @@ For example: `2013.student.size__range=100..500` matches on schools which had be
 
 Open-ended ranges can be performed by omitting one side of the range. For example: `2013.student.size__range=1000..` matches on schools which had over 1000 students.
 
-You can even supply a list of ranges, separated by commas. For example, For example: `2013.student.size__range=..100,1000..2000,5000..` matches on schools which had under 100 students, between 1000 and 2000 students, or over 5000 students.
 
 #### Additional Notes on Ranges
 
@@ -186,39 +183,48 @@ You can even supply a list of ranges, separated by commas. For example, For exam
 
 ## Option Parameters
 
-You can perform extra refinement and organisation of search results using **option parameters**. These special parameters have names beginning with an underscore character (`_`).
+You can perform extra refinement and organisation of search results using **option parameters**. These special parameters are listed below.
 
-### Limiting Returned Fields with `_fields`
+### Limiting Returned Fields with `fields`
 
-By default, records returned in the query response include all their stored fields. However, you can limit the fields returned with the `_fields` option parameter. This parameter takes a comma-separated list of field names. For example: `_fields=id,school.name,school.state` will return result records that only contain those three fields.
+By default, records returned in the query response include all their stored fields. However, you can limit the fields returned with the `fields` option parameter. This parameter takes a comma-separated list of field names. For example: `fields=id,school.name,school.state` will return result records that only contain those three fields.
 
 Requesting specific fields in the response will significantly improve performance and reduce JSON traffic, and is recommended.
 
-### Pagination with `_page` and `_per_page`
+### Pagination with `page` and `per_page`
 
-By default, results are returned in pages of 20 records at a time. To retrieve pages after the first, set the `_page` option parameter to the number of the page you wish to retrieve. Page numbers start at zero; so, to return records 21 through 40, use `_page=1`. Remember that the total number of records available for a given query is given in the `total` field of the top-level `metadata` object.
+By default, results are returned in pages of 20 records at a time. To retrieve pages after the first, set the `page` option parameter to the number of the page you wish to retrieve. Page numbers start at zero; so, to return records 21 through 40, use `page=1`. Remember that the total number of records available for a given query is given in the `total` field of the top-level `metadata` object.
 
-You can also change the number of records returned per page using the `_per_page` option parameter, up to a maximum of 100 records. Bear in mind, however, that large result pages will increase the amount of JSON returned and reduce the performance of the API.
+You can also change the number of records returned per page using the `per_page` option parameter, up to a maximum of 100 records. Bear in mind, however, that large result pages will increase the amount of JSON returned and reduce the performance of the API.
 
-### Sorting with `_sort`
+### Sorting with `sort`
 
-To sort results by a given field, use the `_sort` option parameter. For example, `_sort=2015.student.size` will return records sorted by 2015 student size, in ascending order.
+To sort results by a given field, use the `sort` option parameter. For example, `sort=2015.student.size` will return records sorted by 2015 student size, in ascending order.
 
-By default, using the `_sort_` option returns records sorted into ascending order, but you can specify ascending or descending order by appending `:asc` or `:desc` to the field name. For example: `_sort=2015.student.size:desc`
+By default, using the `sort` option returns records sorted into ascending order, but you can specify ascending or descending order by appending `:asc` or `:desc` to the field name. For example: `sort=2015.student.size:desc`
 
-**Note:** Sorting is only availble on fields with the data type `integer`, `float`, `autocomplete` or `name`.
+**Note:** Sorting is only available on fields with the data type `integer`, `float`, `autocomplete` or `name`.
 
 **Note:** Make sure the sort parameter is a field in the data set. For more information, please take a look at [data dictionary](https://collegescorecard.ed.gov/assets/CollegeScorecardDataDictionary.xlsx)
 
-### Geographic Filtering with `_zip` and `_distance`
+### Geographic Filtering with `zip` and `distance`
 
 When the dataset includes a `location` at the root level (`location.lat` and
-`location.lon`) then the documents will be indexed geographically. You can use the `_zip` and `_distance` options to narrow query results down to those within a geographic area. For example, `_zip=12345&_distance=10mi` will return only those results within 10 miles of the center of the given zip code.
+`location.lon`) then the documents will be indexed geographically. You can use the `zip` and `distance` options to narrow query results down to those within a geographic area. For example, `zip=12345&distance=10mi` will return only those results within 10 miles of the center of the given zip code.
 
-Additionally, you can request `location.lat` and `location.lon` in a search that includes a `_fields` filter and it will return the record(s) with respective lat and/or lon coordinates.
+Additionally, you can request `location.lat` and `location.lon` in a search that includes a `fields` filter and it will return the record(s) with respective lat and/or lon coordinates.
 
 #### Additional Notes on Geographic Filtering
 
-* By default, any number passed in the `_distance` parameter is treated as a number of miles, but you can specify miles or kilometers by appending `mi` or `km` respectively.
+* By default, any number passed in the `distance` parameter is treated as a number of miles, but you can specify miles or kilometers by appending `mi` or `km` respectively.
 * Distances are calculated from the center of the given zip code, not the boundary.
 * Only U.S. zip codes are supported.
+
+
+# New for Version 1.7
+
+With the inclusion of the Department of Education's Field of Study data, there are a number of new improvements that have been incorporated into Open Data Maker. 
+
+* The field of study data is included as an array of objects nested under a specified key. These objects may be queried just like any other data. However, there is an additional parameters to add to your API call to manage what is returned. By default, if specifying a search parameter, only objects of the array that match that parameter will be returned. You can pass `&all_programs_nested=true` to return all the items in the array instead of just those that match. 
+* When specifying specific fields to be returned from the API, the default response is to have a dotted string of the path to the field returned. As of verison 1.7, you can pass the parameter `keys_nested=true` get back a true json object instead of the dotted string. 
+* Lastly, wildcard fields are now possible with version 1.7. If you want to get back data for just the latest available data, it is now possible to specify a query such as `fields=id,school,latest` which will return the ID field, the School object and the Latest object and all the nested objects contained within each. 
