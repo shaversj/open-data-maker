@@ -188,7 +188,7 @@ module DataMagic
         range_hash
       end
 
-      def sort_nested_query_paths_and_terms(nested_query_pairs)
+      def organize_paths_and_terms_for_nested_query(nested_query_pairs)
         paths_and_terms = []
         nested_query_pairs.each do |key, value|
           if nested_data_types.any? {|nested| key.start_with? nested }
@@ -233,7 +233,7 @@ module DataMagic
       end
 
       def build_nested_query(nested_query_pairs)
-        query_info = sort_nested_query_paths_and_terms(nested_query_pairs)
+        query_info = organize_paths_and_terms_for_nested_query(nested_query_pairs)
         paths_and_terms = query_info[:paths_and_terms]
         build_filter_query = query_info[:build_filter_query]
 
