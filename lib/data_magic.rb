@@ -11,6 +11,7 @@ require 'uri'
 require 'cf-app-utils'
 require 'logger'
 require 'set'
+require 'json'
 
 require_relative 'data_magic/config'
 require_relative 'data_magic/index'

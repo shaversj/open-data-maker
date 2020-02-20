@@ -1,3 +1,5 @@
+require 'json'
+
 module DataMagic
   module QueryBuilder
     class << self
@@ -74,7 +76,9 @@ module DataMagic
 
         query_hash = set_query_source(query_hash, nested_query, nested_fields, query_fields, all_programs_nested)
 
-        query_hash[:sort] = get_sort_order(options[:sort], config) if options[:sort] && !options[:sort].empty?
+        if options[:sort] && !options[:sort].empty?
+          set_sort_keys_in_query_hash(options[:sort], config, query_hash)
+        end
 
         query_hash
       end
@@ -375,17 +379,54 @@ module DataMagic
         options[:fields].map(&:to_s)
       end
 
-      # @description turns a string like "state,population:desc" into [{'state' => {order: 'asc'}},{ "population" => {order: "desc"} }]
-      # @param [String] sort_param
-      # @return [Array]
-      def get_sort_order(sort_param, config)
+      # Evaluate and collect sort param properties
+      # Returns a hash
+      def organize_sort_params(sort_param, config)
         sort_param.to_s.scan(/(\w+[\.\w]*):?(\w*)/).map do |field_name, direction|
+          # binding.pry
           direction = 'asc' if direction.empty?
-          type = config.field_type(field_name)
-          # for 'autocomplete' search on lowercase not analyzed indexed in _name
-          field_name = "_#{field_name}" if type  == 'autocomplete'
-          { field_name => { order: direction } }
+
+          if config.field_type(field_name) == 'autocomplete'
+            field_name = "_#{field_name}"
+          end
+
+          nested_field_type = field_type_nested?(field_name)
+
+          {
+            :direction          => direction,
+            :is_nested_datatype => nested_field_type,
+            :field_name         => field_name
+          }
         end
+
+      end
+
+      def define_nested_sort(sort_property_set, query_hash)
+        h = sort_property_set
+        path = nested_data_types().select { |n| h[:field_name].start_with? n }.first
+        filter = query_hash[:query][:bool][:filter][:nested][:query]
+
+        {
+          h[:field_name] => {
+            :order => h[:direction],
+            :nested_path => path,
+            :nested_filter => filter
+          }
+        }
+      end
+
+      def set_sort_keys_in_query_hash(sort_param, config, query_hash)
+        sort_key_properties = organize_sort_params(sort_param, config)
+
+        query_hash[:sort] = sort_key_properties.map do |h|
+          if h[:is_nested_datatype] == true
+            define_nested_sort(h, query_hash)
+          else
+            { h[:field_name] => { order: h[:direction] }}
+          end
+        end
+
+        query_hash
       end
 
       def to_number(value)
@@ -495,7 +536,8 @@ module DataMagic
           query_hash[:_source] = { exclude: ["_*"] }
         end
 
-        # if this is a nested_query AND there are nested fields, then those fields should be passed to post_es_response key, rather than :_source
+        # if this is a nested_query AND there are nested fields, then those fields should be passed to 
+        # post_es_response key, rather than :_source
         if nested_query && !nested_fields.empty?
           query_hash[:post_es_response][:nested_fields_filter] = nested_fields
         end
