@@ -200,7 +200,7 @@ describe DataMagic::QueryBuilder do
     end
   end
 
-  describe "builds queries that correctly handle fields in params" do
+  describe "builds queries that correctly organizes requested fields by datatype" do
     context "no fields are passed in the params" do
       subject {{}}
       let(:options) {{}}
