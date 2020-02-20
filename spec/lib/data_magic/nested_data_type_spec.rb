@@ -262,4 +262,53 @@ describe DataMagic::QueryBuilder do
       end
     end
   end
+
+  describe "adds sort properties correctly" do
+    let(:sort_str) { "2016.programs.cip_4_digit.earnings.median_earnings" }
+    let(:options) {{ :sort => sort_str }}
+
+    context "single sort field is a nested datatype" do
+      subject {{}}
+      let(:nested_sort_filter) {[
+        sort_str => {
+          order: "asc",
+          nested_path: "2016.programs.cip_4_digit",
+          nested_filter: nil
+        }
+      ]}
+
+      it "includes the nested sort field term" do
+        expect(query_hash[:sort][0].keys[0]).to eql sort_str
+      end
+
+      it "assigns the nested path" do
+        expect(query_hash[:sort][0][sort_str][:nested_path]).to eql "2016.programs.cip_4_digit"
+      end
+
+      it "builds the correct nested sort hash structure" do
+        expect(query_hash[:sort]).to eql nested_sort_filter
+      end
+    end
+
+    context "sort field and query term are nested datatype fields" do
+      subject {{ "2016.programs.cip_4_digit.code" => "1312" }}
+      let(:nested_sort_filter) {[
+        sort_str => {
+          order: "asc",
+          nested_path: "2016.programs.cip_4_digit",
+          nested_filter: {
+            bool: {
+              must: [{
+                  match: { "2016.programs.cip_4_digit.code" => "1312" }
+              }]
+            }
+          }
+        }
+      ]}
+
+      it "builds the correct nested sort hash structure" do
+        expect(query_hash[:sort]).to eql nested_sort_filter
+      end
+    end
+  end
 end

@@ -39,6 +39,11 @@ dictionary:
       6: Doctoral Degree
       7: First Professional Degree
       8: Graduate/Professional Certificate"
+  programs.cip_4_digit.earnings.median_earnings:
+    source: P_MD_EARN_WNE
+    map: program
+    type: integer
+    description: Median earnings of federally-aided completers in the earnings cohort
 
 shared_config: &shared_config
   contents:

@@ -77,7 +77,7 @@ module DataMagic
         query_hash = set_query_source(query_hash, nested_query, nested_fields, query_fields, all_programs_nested)
 
         if options[:sort] && !options[:sort].empty?
-          set_sort_keys_in_query_hash(options[:sort], config, query_hash)
+          set_sort_filter_in_query_hash(options[:sort], config, query_hash)
         end
 
         query_hash
@@ -383,7 +383,6 @@ module DataMagic
       # Returns a hash
       def organize_sort_params(sort_param, config)
         sort_param.to_s.scan(/(\w+[\.\w]*):?(\w*)/).map do |field_name, direction|
-          # binding.pry
           direction = 'asc' if direction.empty?
 
           if config.field_type(field_name) == 'autocomplete'
@@ -404,7 +403,8 @@ module DataMagic
       def define_nested_sort(sort_property_set, query_hash)
         h = sort_property_set
         path = nested_data_types().select { |n| h[:field_name].start_with? n }.first
-        filter = query_hash[:query][:bool][:filter][:nested][:query]
+
+        filter = !query_hash.dig(:query,:bool,:filter,:nested,:query).nil? ? query_hash[:query][:bool][:filter][:nested][:query] : nil
 
         {
           h[:field_name] => {
@@ -415,7 +415,7 @@ module DataMagic
         }
       end
 
-      def set_sort_keys_in_query_hash(sort_param, config, query_hash)
+      def set_sort_filter_in_query_hash(sort_param, config, query_hash)
         sort_key_properties = organize_sort_params(sort_param, config)
 
         query_hash[:sort] = sort_key_properties.map do |h|
