@@ -27,7 +27,7 @@ module DataMagic
         query_fields  = !options[:fields].nil? ? options[:fields] - nested_fields : []
 
         original_params = params.clone()
-        
+
         # check params keys - are any nested data type?
         term_pairs = determine_query_term_datatypes(params)
         nested_query_pairs = term_pairs[:nested_query_pairs]
@@ -136,10 +136,10 @@ module DataMagic
           nested, *standard_fields = split_key_terms
           dotted_field = standard_fields.join(".")
 
-          field_type = @@dictionary[dotted_field]["type"]
+          field_type = @@dictionary[dotted_field]["type"].nil? ? "string" : @@dictionary[dotted_field]["type"]
           value = params[key]
-
-          if field_type == "integer" && value.is_a?(String) && /,/.match(value) # list of integers
+  
+          if (field_type == "string" || field_type == "integer") && value.is_a?(String) && /,/.match(value) # lists of integers or strings
             value = value.split(',').map do |str|
               str.tr("[]","").to_i
             end
