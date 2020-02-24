@@ -281,10 +281,6 @@ module DataMagic
         }
       end
 
-      def get_outer_nested_query(inner_queries)
-        { must: inner_queries }
-      end
-
       def get_inner_nested_filter_query(path, terms)
         { 
           nested: {
