@@ -136,8 +136,9 @@ module DataMagic
           nested, *standard_fields = split_key_terms
 
           dotted_field = standard_fields.join(".")
-          if dotted_field.include?("__range")
+          if dotted_field.include?("__range") || dotted_field.include?("__not")
             dotted_field = dotted_field.chomp("__range")
+            dotted_field = dotted_field.chomp("__not")
           end
 
           field_type = @@dictionary[dotted_field]["type"].nil? ? "string" : @@dictionary[dotted_field]["type"]
