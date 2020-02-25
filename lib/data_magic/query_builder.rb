@@ -79,7 +79,7 @@ module DataMagic
         if options[:sort] && !options[:sort].empty?
           set_sort_filter_in_query_hash(options[:sort], config, query_hash)
         end
-
+        
         query_hash
       end
 
@@ -204,17 +204,24 @@ module DataMagic
             path = nested_data_types.select {|nested| key.start_with? nested }.join("")
           end
           range_query = key.include?("__range")
+          not_query = key.include?("__not")
           or_query = value.is_a? Array
 
           use_filter_key = false
+
           if range_query
             query_term = get_nested_range_query(key, value)
           elsif or_query
             query_term = { terms: { key => value }}
             use_filter_key = true
           else
-            query_term = { match: { key => value }}
+            if not_query
+              query_term = set_not_match_key(key, value)
+            else
+              query_term = { match: { key => value }}
+            end
           end
+
           paths_and_terms.push({
             path: path,
             term: query_term,
@@ -241,6 +248,9 @@ module DataMagic
         query_info
       end
 
+      # in this function, the query_pairs are of the form:
+      #     { field_label => value }
+      #     {"latest.programs.cip_4_digit.credential.level__not"=>"3"}
       def build_nested_query(nested_query_pairs)
         query_info = organize_paths_and_terms_for_nested_query(nested_query_pairs)
         paths_and_terms = query_info[:paths_and_terms]
@@ -256,7 +266,9 @@ module DataMagic
           path        = paths.to_a[0]
           terms       = paths_and_terms.map { |item| item[:term] }
 
-          if term_keys.length > 1
+          if term_keys.include?(:not_match)
+            nested_query = get_nested_query_with_a_not_term(path, terms)
+          elsif term_keys.length > 1 && !term_keys.include?(:not_match)
             nested_query = get_nested_query_bool_filter_query(path, terms)
           elsif term_keys.length == 1 && build_filter_query
             nested_query = get_inner_nested_filter_query(path, terms)
@@ -306,6 +318,35 @@ module DataMagic
         }
       end
 
+
+      def set_not_match_key(key, value)
+        { not_match: { key.chomp("__not") => value }}
+      end
+
+      def get_nested_query_with_a_not_term(path, terms)
+          not_hash = {}
+
+          terms.each do |h|
+            if h.keys[0] == :match
+              not_hash[:must] ={}
+              not_hash[:must][:match] = h[:match]
+            elsif h.keys[0] == :not_match
+              not_hash[:must_not] ={}
+              not_hash[:must_not][:match] = h[:not_match]
+            end
+          end
+
+        { 
+          nested: {
+            path: path,
+            query: {
+              bool: not_hash
+            },
+            inner_hits: {}
+          }
+        }
+      end
+
       def add_bool_to_query_hash(query_hash)
         query_hash[:query][:bool] = {}
       end
@@ -339,6 +380,7 @@ module DataMagic
       end
 
 
+      # Called from condition within incorporate_nested_with_autocomplete_query
       def move_common_key_to_must_key_on_query_hash(query_hash)
         common = {}
         common[:common] = query_hash[:query][:common]
