@@ -79,7 +79,7 @@ module DataMagic
         if options[:sort] && !options[:sort].empty?
           set_sort_filter_in_query_hash(options[:sort], config, query_hash)
         end
-        
+
         query_hash
       end
 
@@ -211,12 +211,12 @@ module DataMagic
 
           if range_query
             query_term = get_nested_range_query(key, value)
-          elsif or_query
+          elsif or_query && !not_query
             query_term = { terms: { key => value }}
             use_filter_key = true
           else
             if not_query
-              query_term = set_not_match_key(key, value)
+              query_term = { not_match: { key.chomp("__not") => value }}
             else
               query_term = { match: { key => value }}
             end
@@ -318,23 +318,28 @@ module DataMagic
         }
       end
 
-
-      def set_not_match_key(key, value)
-        { not_match: { key.chomp("__not") => value }}
-      end
-
       def get_nested_query_with_a_not_term(path, terms)
-          not_hash = {}
+        not_hash = {}
 
-          terms.each do |h|
-            if h.keys[0] == :match
-              not_hash[:must] ={}
+        terms.each do |h|
+          if h.keys[0] == :match
+            not_hash[:must] ={}
+            value = h[:match][h[:match].keys[0]]
+            if value.is_a? Array
+              not_hash[:must][:terms] = h[:match]
+            else
               not_hash[:must][:match] = h[:match]
-            elsif h.keys[0] == :not_match
-              not_hash[:must_not] ={}
+            end
+          elsif h.keys[0] == :not_match
+            not_hash[:must_not] ={}
+            value = h[:not_match][h[:not_match].keys[0]]
+            if value.is_a? Array
+              not_hash[:must_not][:terms] = h[:not_match]
+            else
               not_hash[:must_not][:match] = h[:not_match]
             end
           end
+        end
 
         { 
           nested: {
