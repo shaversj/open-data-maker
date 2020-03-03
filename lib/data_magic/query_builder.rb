@@ -388,6 +388,18 @@ module DataMagic
           query_hash[:query].delete(:match)
 
           query_hash[:query][:bool][:filter] = nested_query
+        elsif !query_hash.dig(:query,:terms).nil?
+          binding.pry
+          terms = match_terms = query_hash[:query][:terms]
+          query_hash[:query][:bool] = {
+            must: {}
+          }
+          query_hash[:query][:bool][:must][:terms] = terms
+          query_hash[:query].delete(:terms)
+
+          query_hash[:query][:bool][:filter] = nested_query
+
+
         end
 
         query_hash
