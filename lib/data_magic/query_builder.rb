@@ -376,6 +376,23 @@ module DataMagic
         query_hash
       end
 
+      def incorporate_nested_with_nonfilter_query(query_hash, nested_query_pairs)
+        nested_query = build_nested_query(nested_query_pairs)
+
+        if !query_hash.dig(:query,:match).nil?
+          match_terms = match_terms = query_hash[:query][:match]
+          query_hash[:query][:bool] = {
+            must: {}
+          }
+          query_hash[:query][:bool][:must][:match] = match_terms
+          query_hash[:query].delete(:match)
+
+          query_hash[:query][:bool][:filter] = nested_query
+        end
+
+        query_hash
+      end
+
       def incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
         nested_query = build_nested_query(nested_query_pairs)
         
@@ -416,8 +433,10 @@ module DataMagic
       def build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
         if !query_hash.dig(:query,:bool,:filter).nil?
           query_hash_with_nested_query = incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
-        else
+        elsif !query_hash.dig(:query,:common).nil?
           query_hash_with_nested_query = incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
+        else
+          query_hash_with_nested_query = incorporate_nested_with_nonfilter_query(query_hash, nested_query_pairs)
         end
 
         query_hash_with_nested_query
