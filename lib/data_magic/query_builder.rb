@@ -183,6 +183,8 @@ module DataMagic
       def get_nested_range_query(key, value)
         range_params = value.split("..")
         first, last = range_params
+        last = last.nil? ? [] : last
+        first = first.nil? ? [] : first
 
         if !first.empty? && !last.empty?
           range_values = { gte: first, lte: last } 
@@ -379,32 +381,25 @@ module DataMagic
       def incorporate_nested_with_nonfilter_query(query_hash, nested_query_pairs)
         nested_query = build_nested_query(nested_query_pairs)
 
+        query_hash[:query][:bool] = { must: {} }
+        query_hash[:query][:bool][:filter] = nested_query
+
         if !query_hash.dig(:query,:match).nil?
-          match_terms = match_terms = query_hash[:query][:match]
-          query_hash[:query][:bool] = {
-            must: {}
-          }
+          match_terms = query_hash[:query][:match]
           query_hash[:query][:bool][:must][:match] = match_terms
           query_hash[:query].delete(:match)
-
-          query_hash[:query][:bool][:filter] = nested_query
         elsif !query_hash.dig(:query,:terms).nil?
-          terms = match_terms = query_hash[:query][:terms]
-          query_hash[:query][:bool] = {
-            must: {}
-          }
+          terms = query_hash[:query][:terms]
           query_hash[:query][:bool][:must][:terms] = terms
           query_hash[:query].delete(:terms)
-
-          query_hash[:query][:bool][:filter] = nested_query
-
-
         end
+        
+        query_hash[:query][:bool][:filter] = nested_query
 
         query_hash
       end
 
-      def incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
+      def incorporate_nested_with_existing_filter(query_hash, nested_query_pairs)
         nested_query = build_nested_query(nested_query_pairs)
         
         query_hash[:query][:bool][:filter].push(nested_query)
@@ -441,11 +436,39 @@ module DataMagic
         query_hash
       end
 
+      def move_or_key_to_filter_array_on_query_hash(query_hash)
+        or_key = query_hash[:query][:or]
+
+        query_hash[:query].delete(:or)
+        query_hash[:query][:bool][:filter].push({ or: or_key })
+        
+        query_hash
+      end
+
+      def incorporate_nested_with_range_query(query_hash, nested_query_pairs)
+        if (query_hash.dig(:query,:bool).nil?)
+          add_bool_to_query_hash(query_hash)
+        end
+        
+        if (query_hash.dig(:query,:bool,:filter).nil?)
+          query_hash[:query][:bool][:filter] = []
+          move_or_key_to_filter_array_on_query_hash(query_hash)
+
+          # TODO - what if filter key exists but has another hash, rather than an array???
+        end
+
+        query_hash[:query][:bool][:filter].push(build_nested_query(nested_query_pairs))
+
+        query_hash
+      end
+
       def build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
         if !query_hash.dig(:query,:bool,:filter).nil?
-          query_hash_with_nested_query = incorporate_nested_with_filter_query(query_hash, nested_query_pairs)
+          query_hash_with_nested_query = incorporate_nested_with_existing_filter(query_hash, nested_query_pairs)
         elsif !query_hash.dig(:query,:common).nil?
           query_hash_with_nested_query = incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
+        elsif !query_hash.dig(:query,:or).nil?
+          query_hash_with_nested_query = incorporate_nested_with_range_query(query_hash, nested_query_pairs)
         else
           query_hash_with_nested_query = incorporate_nested_with_nonfilter_query(query_hash, nested_query_pairs)
         end
