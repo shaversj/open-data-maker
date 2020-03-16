@@ -32,7 +32,7 @@ describe DataMagic::QueryBuilder do
     end
   end
 
-  describe "builds queries with on nested datatype fields depending on options passed" do
+  describe "alters query depending on the all_programs params that are passed" do
     context "in absence of all_programs param" do
       subject { { "2016.programs.cip_4_digit.code" => "1312" } }
       let(:expected_query) { 
