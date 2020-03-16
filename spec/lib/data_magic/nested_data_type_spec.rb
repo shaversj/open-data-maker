@@ -36,19 +36,21 @@ describe DataMagic::QueryBuilder do
     context "in absence of all_programs param" do
       subject { { "2016.programs.cip_4_digit.code" => "1312" } }
       let(:expected_query) { 
-          { bool: { filter: {
-              nested: {
-                  inner_hits: {},
-                  path: "2016.programs.cip_4_digit",
-                  query: {
-                      bool: {
-                          must: [{
-                              match: { "2016.programs.cip_4_digit.code" => "1312" }
-                          }]
-                      }
-                  }
-              }
-          } } } 
+        { bool: {
+          filter: {
+            nested: {
+                inner_hits: {},
+                path: "2016.programs.cip_4_digit",
+                query: {
+                    bool: {
+                        must: [{
+                            match: { "2016.programs.cip_4_digit.code" => "1312" }
+                        }]
+                    }
+                }
+            }
+          } }
+        } 
       }
       it_correctly "builds a query"
     end
@@ -68,7 +70,8 @@ describe DataMagic::QueryBuilder do
       let(:options) {{ :all_programs_nested => true, :fields => ["2016.programs.cip_4_digit.code.earnings.median_earnings"] }}
 
       let(:expected_query) { 
-        { bool: { filter: {
+        { bool: {
+          filter: {
             nested: {
                 inner_hits: {},
                 path: "2016.programs.cip_4_digit",
@@ -80,7 +83,8 @@ describe DataMagic::QueryBuilder do
                     }
                 }
             }
-        } } } 
+          } 
+        }} 
       }
       let(:nested_meta) {{
         post_es_response: {:nested_fields_filter=>["2016.programs.cip_4_digit.code.earnings.median_earnings"]},
