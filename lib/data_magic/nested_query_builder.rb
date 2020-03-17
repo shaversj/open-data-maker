@@ -4,6 +4,7 @@ module DataMagic
 	module QueryBuilder
 		module NestedQueryBuilder
 			class << self
+
 				def integrate_query_pairs(nested_query_pairs, query_hash, query_pairs)
 					if query_pairs.empty?
 						build_query_from_nested_datatypes(nested_query_pairs, query_hash)
@@ -103,6 +104,7 @@ module DataMagic
 						if nested_data_types.any? {|nested| key.start_with? nested }
 							path = nested_data_types.select {|nested| key.start_with? nested }.join("")
 						end
+						
 						range_query = key.include?("__range")
 						not_query 	= key.include?("__not")
 						or_query 		= value.is_a? Array
@@ -114,14 +116,12 @@ module DataMagic
 						elsif or_query && !not_query
 							query_term = { terms: { key => value }}
 							use_filter_key = true
-						else
-							if not_query
+						elsif not_query
 								query_term = { not_match: { key.chomp("__not") => value }}
-							else
-								query_term = { match: { key => value }}
-							end
+						else
+							query_term = { match: { key => value }}
 						end
-	
+
 						paths_and_terms.push({
 							path: path,
 							term: query_term,
@@ -135,37 +135,6 @@ module DataMagic
 				def nested_data_types()
 					DataMagic.config.es_data_types["nested"]
 				end
-
-				def get_nested_query_base(path)
-					{ 
-						nested: {
-							path: path,
-							inner_hits: {}
-						}
-					}
-				end
-
-				def get_inner_nested_query(path, matches)
-					base = get_nested_query_base(path)
-					base[:nested][:query] = { bool: { must: matches }}
-
-					base
-				end
-
-				def get_nested_query_bool_filter_query(path, terms)
-					base = get_nested_query_base(path)
-					base[:nested][:query] = { bool: { filter: terms }}
-
-					base
-				end
-	
-				def get_inner_nested_filter_query(path, terms)
-					base = get_nested_query_base(path)
-					base[:nested][:filter] = terms
-
-					base
-				end
-
 
 				def incorporate_nested_with_nonfilter_query(query_hash, nested_query_pairs)
 					nested_query = build_nested_query(nested_query_pairs)
@@ -307,7 +276,6 @@ module DataMagic
 					range_hash
 				end
 
-
 				def get_nested_query_with_a_not_term(path, terms)
 					not_hash = {}
 	
@@ -330,16 +298,11 @@ module DataMagic
 							end
 						end
 					end
+
+					nested_base = get_nested_query_base(path)
+					nested_base[:nested][:query] = { bool: not_hash }
 	
-					{ 
-						nested: {
-							path: path,
-							query: {
-								bool: not_hash
-							},
-							inner_hits: {}
-						}
-					}
+					nested_base
 				end
 	
 				def add_must_key_to_bool_on_query_hash(query_hash)
@@ -357,6 +320,38 @@ module DataMagic
 	
 					query_hash
 				end
+
+
+				def get_nested_query_base(path)
+					{ 
+						nested: {
+							path: path,
+							inner_hits: {}
+						}
+					}
+				end
+
+				def get_inner_nested_query(path, matches)
+					base = get_nested_query_base(path)
+					base[:nested][:query] = { bool: { must: matches }}
+
+					base
+				end
+
+				def get_nested_query_bool_filter_query(path, terms)
+					base = get_nested_query_base(path)
+					base[:nested][:query] = { bool: { filter: terms }}
+
+					base
+				end
+	
+				def get_inner_nested_filter_query(path, terms)
+					base = get_nested_query_base(path)
+					base[:nested][:filter] = terms
+
+					base
+				end
+
 			end
 		end
 	end
