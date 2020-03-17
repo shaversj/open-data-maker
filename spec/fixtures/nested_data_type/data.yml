@@ -67,8 +67,20 @@ partial_map:
     link: programs.cip_4_digit.ope6_id
 
 files:
-  - name: ProgramDebt1516_1617PP.csv
-    map: program_debt
+  - name: Most-Recent-Cohorts-All-Data-Elements.csv
+    root: true
+    only:
+    - school
+    nest:
+      key: latest
+      <<: *shared_config
+    delta_only:
+    - ope8_id
+    - ope6_id
+    - location
+    - school
+  - name: FieldOfStudyData1516_1617_PP.csv
+    map: program_data
     nest:
       parent_missing: skip
       key: latest

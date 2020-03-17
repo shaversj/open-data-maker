@@ -62,5 +62,43 @@ describe DataMagic::QueryBuilder do
 
       it_correctly "builds a query"
     end
+
+    context "non-nested query is an autocomplete query and nested query is a match query" do
+      subject {{ 
+        "2016.programs.cip_4_digit.code" => "1312",
+        "school.name" => "arizona"
+      }}
+
+      let(:expected_query) {{
+        bool: {
+          must: {
+            common: {
+              "school.name" => {
+                query: "arizona",
+                cutoff_frequency: 0.001,
+                low_freq_operator: "and"
+              }
+            }
+          },
+          filter: {
+            nested: {
+              inner_hits: {},
+              path: "2016.programs.cip_4_digit",
+              query: {
+                bool: {
+                  must: [{
+                    match: { "2016.programs.cip_4_digit.code" => "1312" }
+                  }]
+                }
+              }
+            }
+          }
+        }
+      }}
+
+      it_correctly "builds a query"
+
+
+    end
   end
 end
