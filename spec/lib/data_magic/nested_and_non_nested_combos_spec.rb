@@ -100,5 +100,41 @@ describe DataMagic::QueryBuilder do
 
 
     end
+
+    context "non-nested query is an range query and nested query is a match query" do
+      subject {{ 
+        "2016.programs.cip_4_digit.code" => "1312",
+        "school.degrees_awarded.predominant__range" => "1..3"
+      }}
+
+      let(:expected_query) {{
+        bool: {
+          filter: [{
+            or: [{
+              range: {
+                "school.degrees_awarded.predominant": {
+                  "gte": 1,
+                  "lte": 3
+                }
+              }
+            }]
+          },{
+            nested: {
+              inner_hits: {},
+              path: "2016.programs.cip_4_digit",
+              query: {
+                bool: {
+                  must: [{
+                    match: { "2016.programs.cip_4_digit.code" => "1312" }
+                  }]
+                }
+              }
+            }
+          }]
+        }
+      }}
+
+      it_correctly "builds a query"
+    end
   end
 end

@@ -20,6 +20,16 @@ dictionary:
     source: CITY
     type: autocomplete
     description: City
+  school.degrees_awarded.predominant:
+    source: PREDDEG
+    type: integer
+    description: |-
+      Predominant undergraduate degree awarded
+        0 Not classified
+        1 Predominantly certificate-degree granting
+        2 Predominantly associate's-degree granting
+        3 Predominantly bachelor's-degree granting
+        4 Entirely graduate-degree granting
   programs.cip_4_digit.code:
     source: CIPCODE
     type: integer
