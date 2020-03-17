@@ -22,6 +22,19 @@ describe DataMagic::QueryBuilder do
   let(:nested_meta) { { post_es_response: {}, from: 0, size: 20, _source: false } }
   let(:options) { {} }
   let(:query_hash) { DataMagic::QueryBuilder.from_params(subject, options, DataMagic.config) }
+  let(:nested_match) {{
+    nested: {
+      inner_hits: {},
+      path: "2016.programs.cip_4_digit",
+      query: {
+        bool: {
+          must: [{
+            match: { "2016.programs.cip_4_digit.code" => "1312" }
+          }]
+        }
+      }
+    }
+}}
 
   shared_examples "builds a query" do
     it "with a query section" do
@@ -44,19 +57,7 @@ describe DataMagic::QueryBuilder do
           must: {
             match: { "id" => "243744" }
           },
-          filter: {
-            nested: {
-              inner_hits: {},
-              path: "2016.programs.cip_4_digit",
-              query: {
-                bool: {
-                  must: [{
-                    match: { "2016.programs.cip_4_digit.code" => "1312" }
-                  }]
-                }
-              }
-            }
-          }
+          filter: nested_match
         }
       }}
 
@@ -80,19 +81,7 @@ describe DataMagic::QueryBuilder do
               }
             }
           },
-          filter: {
-            nested: {
-              inner_hits: {},
-              path: "2016.programs.cip_4_digit",
-              query: {
-                bool: {
-                  must: [{
-                    match: { "2016.programs.cip_4_digit.code" => "1312" }
-                  }]
-                }
-              }
-            }
-          }
+          filter: nested_match
         }
       }}
 
@@ -118,19 +107,9 @@ describe DataMagic::QueryBuilder do
                 }
               }
             }]
-          },{
-            nested: {
-              inner_hits: {},
-              path: "2016.programs.cip_4_digit",
-              query: {
-                bool: {
-                  must: [{
-                    match: { "2016.programs.cip_4_digit.code" => "1312" }
-                  }]
-                }
-              }
-            }
-          }]
+          }, 
+            nested_match
+          ]
         }
       }}
 
