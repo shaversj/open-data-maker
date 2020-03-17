@@ -315,4 +315,96 @@ describe DataMagic::QueryBuilder do
       end
     end
   end
+
+  describe "handles range queries for nested data types" do
+    context "a single nested datatype is a range query with min and max defined" do
+      subject {{ "2016.programs.cip_4_digit.credential.level__range" => "6..8" }}
+
+      let(:expected_query) { 
+        { 
+          bool: { 
+            filter: {
+              nested: {
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    must: [{
+                      or: [{
+                        range: {
+                          "2016.programs.cip_4_digit.credential.level" => { "gte": "6", "lte": "8" }
+                        }
+                      }]
+                    }]
+                  }
+                },
+                inner_hits: {}
+              }
+            }
+          }
+        } 
+      }
+
+      it_correctly "builds a query"
+    end
+
+    context "a single nested datatype is a range query with only min defined" do
+      subject {{ "2016.programs.cip_4_digit.credential.level__range" => "6.." }}
+
+      let(:expected_query) { 
+        { 
+          bool: { 
+            filter: {
+              nested: {
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    must: [{
+                      or: [{
+                        range: {
+                          "2016.programs.cip_4_digit.credential.level" => { "gte": "6" }
+                        }
+                      }]
+                    }]
+                  }
+                },
+                inner_hits: {}
+              }
+            }
+          }
+        } 
+      }
+
+      it_correctly "builds a query"
+    end
+
+    context "a single nested datatype is a range query with only max defined" do
+      subject {{ "2016.programs.cip_4_digit.credential.level__range" => "..8" }}
+
+      let(:expected_query) { 
+        { 
+          bool: { 
+            filter: {
+              nested: {
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    must: [{
+                      or: [{
+                        range: {
+                          "2016.programs.cip_4_digit.credential.level" => { "lte": "8" }
+                        }
+                      }]
+                    }]
+                  }
+                },
+                inner_hits: {}
+              }
+            }
+          }
+        } 
+      }
+
+      it_correctly "builds a query"
+    end
+  end
 end
