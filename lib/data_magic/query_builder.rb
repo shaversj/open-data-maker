@@ -423,7 +423,6 @@ module DataMagic
         if (query_hash.dig(:query,:bool).nil?)
           add_bool_to_query_hash(query_hash)
         end
-        
         if (query_hash.dig(:query,:bool,:must).nil?)
           add_must_key_to_bool_on_query_hash(query_hash)
           move_common_key_to_must_key_on_query_hash(query_hash)
@@ -463,8 +462,27 @@ module DataMagic
       end
 
       def build_query_from_nested_and_nonnested_datatypes(nested_query_pairs, query_hash)
-        if !query_hash.dig(:query,:bool,:filter).nil?
-          query_hash_with_nested_query = incorporate_nested_with_existing_filter(query_hash, nested_query_pairs)
+        if !query_hash.dig(:query,:bool).nil?
+          bool_keys_minus_filter = query_hash[:query][:bool].keys.select {|key| key != :filter } 
+
+          if !query_hash.dig(:query,:bool,:filter).nil?
+            query_hash_with_nested_query = incorporate_nested_with_existing_filter(query_hash, nested_query_pairs)
+            
+            bool_keys_minus_filter.each do |key|
+              to_move = query_hash_with_nested_query[:query][:bool][key]
+
+              if (key == :must || key == :must_not)
+                query_hash_with_nested_query[:query][:bool][:filter].push({
+                  bool: {
+                    key => to_move[0]
+                  }
+                })
+              end
+
+              query_hash_with_nested_query[:query][:bool].delete(key)
+            end
+
+          end
         elsif !query_hash.dig(:query,:common).nil?
           query_hash_with_nested_query = incorporate_nested_with_autocomplete_query(query_hash, nested_query_pairs)
         elsif !query_hash.dig(:query,:or).nil?
@@ -562,9 +580,9 @@ module DataMagic
       end
 
       def range_query(squery, operator, field, value)
-        if operator == :ne or operator == :not # field negation
+        if operator == :ne or operator == :not      # field negation
           squery.where.not(field => value)
-        else # field range
+        else                                        # field range
           squery.filter(
             or: build_ranges(field, value.split(','))
           )
