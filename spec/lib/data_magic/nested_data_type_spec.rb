@@ -406,5 +406,41 @@ describe DataMagic::QueryBuilder do
 
       it_correctly "builds a query"
     end
+
+    context "a nested datatype range query is combined with and nested match query" do
+      subject {{ 
+        "2016.programs.cip_4_digit.credential.level__range" => "6..8",
+        "2016.programs.cip_4_digit.code" => "1312"
+      }}
+
+      let(:expected_query) { 
+        { 
+          bool: { 
+            filter: {
+              nested: {
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    filter: [{
+                      or: [{
+                        range: {
+                          "2016.programs.cip_4_digit.credential.level" => { "gte": "6", "lte": "8" }
+                        }
+                      }]
+                    }, {
+                      match: { "2016.programs.cip_4_digit.code" => "1312" }
+                    }]
+                  }
+                },
+                inner_hits: {}
+              }
+            }
+          }
+        } 
+      }
+
+      it_correctly "builds a query"
+    end
+    
   end
 end
