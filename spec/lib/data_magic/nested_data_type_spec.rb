@@ -36,20 +36,26 @@ describe DataMagic::QueryBuilder do
     context "in absence of all_programs param" do
       subject { { "2016.programs.cip_4_digit.code" => "1312" } }
       let(:expected_query) { 
-        { bool: {
-          filter: {
-            nested: {
+        { 
+          bool: {
+            filter: {
+              nested: {
                 inner_hits: {},
                 path: "2016.programs.cip_4_digit",
                 query: {
-                    bool: {
+                  bool: {
+                    filter: [{
+                      bool: {
                         must: [{
-                            match: { "2016.programs.cip_4_digit.code" => "1312" }
+                          match: { "2016.programs.cip_4_digit.code" => "1312" }
                         }]
-                    }
+                      }
+                    }]
+                  }
                 }
             }
-          } }
+          } 
+        }
         } 
       }
       it_correctly "builds a query"
@@ -70,21 +76,27 @@ describe DataMagic::QueryBuilder do
       let(:options) {{ :all_programs_nested => true, :fields => ["2016.programs.cip_4_digit.code.earnings.median_earnings"] }}
 
       let(:expected_query) { 
-        { bool: {
-          filter: {
-            nested: {
+        { 
+          bool: {
+            filter: {
+              nested: {
                 inner_hits: {},
                 path: "2016.programs.cip_4_digit",
                 query: {
-                    bool: {
+                  bool: {
+                    filter: [{
+                      bool: {
                         must: [{
-                            match: { "2016.programs.cip_4_digit.code" => "1312" }
+                          match: { "2016.programs.cip_4_digit.code" => "1312" }
                         }]
-                    }
+                      }
+                    }]
+                  }
                 }
-            }
-          } 
-        }} 
+              }
+            } 
+          }
+        } 
       }
       let(:nested_meta) {{
         post_es_response: {:nested_fields_filter=>["2016.programs.cip_4_digit.code.earnings.median_earnings"]},
@@ -101,15 +113,23 @@ describe DataMagic::QueryBuilder do
     context "for a single nested datatype query that takes an array of values" do
       subject { { "2016.programs.cip_4_digit.credential.level" => "[2,3,5]" } }
       let(:expected_query) { 
-          { bool: { filter: {
+        { 
+          bool: { 
+            filter: {
               nested: {
-                  inner_hits: {},
-                  path: "2016.programs.cip_4_digit",
-                  filter: [
-                    { "terms": { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} }
-                  ]
+                inner_hits: {},
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    filter: [
+                      { "terms": { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} }
+                    ]
+                  }
+                }
               }
-          } } } 
+            } 
+          }
+        } 
       }
       it_correctly "builds a query"
     end
@@ -120,20 +140,28 @@ describe DataMagic::QueryBuilder do
         "2016.programs.cip_4_digit.credential.level" => "2",
       } }
       let(:expected_query) { 
-          { bool: { filter: {
+        { 
+          bool: { 
+            filter: {
               nested: {
-                  inner_hits: {},
-                  path: "2016.programs.cip_4_digit",
-                  query: {
+                inner_hits: {},
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    filter: [
                       bool: {
-                          must: [
-                            { match: { "2016.programs.cip_4_digit.code" => "1312" }},
-                            { match: { "2016.programs.cip_4_digit.credential.level" => "2" }}
-                          ]
+                        must: [
+                          { match: { "2016.programs.cip_4_digit.code" => "1312" }},
+                          { match: { "2016.programs.cip_4_digit.credential.level" => "2" }}
+                        ]
                       }
+                    ]
                   }
+                }
               }
-          } } } 
+            } 
+          } 
+        } 
       }
       it_correctly "builds a query"
       
@@ -145,16 +173,24 @@ describe DataMagic::QueryBuilder do
         "2016.programs.cip_4_digit.code" => "[1312,4004]",
       } }
       let(:expected_query) { 
-          { bool: { filter: {
+        { 
+          bool: { 
+            filter: {
               nested: {
-                  inner_hits: {},
-                  path: "2016.programs.cip_4_digit",
-                  filter: [
-                    { "terms": { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} },
-                    { "terms": { "2016.programs.cip_4_digit.code" => [1312,4004]} }
-                  ]
+                inner_hits: {},
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    filter: [
+                      { "terms": { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} },
+                      { "terms": { "2016.programs.cip_4_digit.code" => [1312,4004]} }
+                    ]
+                  }
+                }
               }
-          } } } 
+            }
+          } 
+        } 
       }
       it_correctly "builds a query"
     end
@@ -165,7 +201,8 @@ describe DataMagic::QueryBuilder do
         "2016.programs.cip_4_digit.code" => "1312"
       } }
       let(:expected_query) { 
-        { bool: { filter: {
+        { bool: { 
+          filter: {
             nested: {
               inner_hits: {},
               path: "2016.programs.cip_4_digit",
@@ -173,7 +210,11 @@ describe DataMagic::QueryBuilder do
                 bool: {
                   filter: [
                     { terms: { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} },
-                    { match: { "2016.programs.cip_4_digit.code" => "1312" }}
+                    { bool: { 
+                        must: [{ 
+                          match: { "2016.programs.cip_4_digit.code" => "1312" }
+                        }]
+                    }}
                   ]
                 }
               }
@@ -190,15 +231,23 @@ describe DataMagic::QueryBuilder do
     context "for a single nested datatype query term" do
       subject { { "2016.programs.cip_4_digit.credential.level" => "[2,3,5]" } }
       let(:expected_query) { 
-          { bool: { filter: {
+        { 
+          bool: { 
+            filter: {
               nested: {
-                  inner_hits: {},
-                  path: "2016.programs.cip_4_digit",
-                  filter: [
-                    { "terms": { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} }
-                  ]
+                inner_hits: {},
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    filter: [
+                      { "terms": { "2016.programs.cip_4_digit.credential.level" => [2, 3, 5]} }
+                    ]
+                  }
+                }
               }
-          } } } 
+            } 
+          } 
+        } 
       }
       it_correctly "builds a query"
     end
@@ -302,8 +351,12 @@ describe DataMagic::QueryBuilder do
           nested_path: "2016.programs.cip_4_digit",
           nested_filter: {
             bool: {
-              must: [{
-                  match: { "2016.programs.cip_4_digit.code" => "1312" }
+              filter: [{
+                bool: {
+                  must: [{
+                    match: { "2016.programs.cip_4_digit.code" => "1312" }
+                  }]
+                }
               }]
             }
           }
@@ -328,7 +381,7 @@ describe DataMagic::QueryBuilder do
                 path: "2016.programs.cip_4_digit",
                 query: {
                   bool: {
-                    must: [{
+                    filter: [{
                       or: [{
                         range: {
                           "2016.programs.cip_4_digit.credential.level" => { "gte": "6", "lte": "8" }
@@ -358,7 +411,7 @@ describe DataMagic::QueryBuilder do
                 path: "2016.programs.cip_4_digit",
                 query: {
                   bool: {
-                    must: [{
+                    filter: [{
                       or: [{
                         range: {
                           "2016.programs.cip_4_digit.credential.level" => { "gte": "6" }
@@ -388,7 +441,7 @@ describe DataMagic::QueryBuilder do
                 path: "2016.programs.cip_4_digit",
                 query: {
                   bool: {
-                    must: [{
+                    filter: [{
                       or: [{
                         range: {
                           "2016.programs.cip_4_digit.credential.level" => { "lte": "8" }
@@ -428,7 +481,11 @@ describe DataMagic::QueryBuilder do
                         }
                       }]
                     }, {
-                      match: { "2016.programs.cip_4_digit.code" => "1312" }
+                      bool: {
+                        must: [{
+                          match: { "2016.programs.cip_4_digit.code" => "1312" }
+                        }]
+                      }
                     }]
                   }
                 },
@@ -441,6 +498,145 @@ describe DataMagic::QueryBuilder do
 
       it_correctly "builds a query"
     end
-    
+  end
+
+  describe "handles not queries for nested data types" do
+    context "a single nested datatype is a not query" do
+      subject {{ "2016.programs.cip_4_digit.credential.level__not" => "3" }}
+
+      let(:expected_query) { 
+        { 
+          bool: { 
+            filter: {
+              nested: {
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    filter: [{
+                      bool: {
+                        must_not: [{
+                          match: { "2016.programs.cip_4_digit.credential.level" => "3" }
+                        }]
+                      }
+                    }]
+                  }
+                },
+                inner_hits: {}
+              }
+            }
+          }
+        } 
+      }
+
+      it_correctly "builds a query"
+    end
+
+    context "a single nested datatype is a not query with a list of values" do
+      subject {{ "2016.programs.cip_4_digit.credential.level__not" => [2,3,5] }}
+
+      let(:expected_query) { 
+        { 
+          bool: { 
+            filter: {
+              nested: {
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    filter: [{
+                      bool: {
+                        must_not: [{
+                          terms: { "2016.programs.cip_4_digit.credential.level" => [2,3,5] }
+                        }]
+                      }
+                    }]
+                  }
+                },
+                inner_hits: {}
+              }
+            }
+          }
+        } 
+      }
+
+      it_correctly "builds a query"
+    end
+
+    context "a nested datatype not query is combined with a match query" do
+      subject {{ 
+        "2016.programs.cip_4_digit.credential.level__not" => [2,3,5],
+        "2016.programs.cip_4_digit.code" => "1312"
+      }}
+
+      let(:expected_query) { 
+        { 
+          bool: { 
+            filter: {
+              nested: {
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    filter: [{
+                      bool: {
+                        must_not: [{
+                          terms: { "2016.programs.cip_4_digit.credential.level" => [2,3,5] }
+                        }]
+                      }
+                    }, {
+                      bool: {
+                        must: [{
+                          match: { "2016.programs.cip_4_digit.code" => "1312" }
+                        }],
+                      }
+                    }]
+                  }
+                },
+                inner_hits: {}
+              }
+            }
+          }
+        } 
+      }
+
+      it_correctly "builds a query"
+    end
+
+    context "a nested datatype not query is combined with a range query" do
+      subject {{ 
+        "2016.programs.cip_4_digit.earnings.median_earnings__range" => "70000..",
+        "2016.programs.cip_4_digit.credential.level__not" => 8
+      }}
+
+      let(:expected_query) { 
+        { 
+          bool: { 
+            filter: {
+              nested: {
+                path: "2016.programs.cip_4_digit",
+                query: {
+                  bool: {
+                    filter: [{
+                      or: [{
+                        range: {
+                          "2016.programs.cip_4_digit.earnings.median_earnings" => { "gte": "70000" }
+                        }
+                      }]
+                    },{
+                      bool: {
+                        must_not: [{
+                          match: { "2016.programs.cip_4_digit.credential.level" => 8 }
+                        }],
+                      }
+                    }]
+                  }
+                },
+                inner_hits: {}
+              }
+            }
+          }
+        } 
+      }
+
+      it_correctly "builds a query"
+    end
   end
 end

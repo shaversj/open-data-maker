@@ -47,9 +47,7 @@ module DataMagic
 				#     { field_label => value }
 				#     {"latest.programs.cip_4_digit.credential.level__not"=>"3"}
 				def build_nested_query(nested_query_pairs)
-					query_info = organize_info_for_nested_query(nested_query_pairs)
-					paths_and_terms = query_info[:paths_and_terms]
-					build_filter_query = query_info[:build_filter_query]
+					paths_and_terms = organize_info_for_nested_query(nested_query_pairs)
 
 					paths = Set[]
 					paths_and_terms.each { |hash| paths.add(hash[:path]) }
@@ -60,28 +58,46 @@ module DataMagic
 					if paths.length == 1
 						path        = paths.to_a[0]
 						terms       = paths_and_terms.map { |item| item[:term] }
+						terms_hash 	= { terms: [] }
 
-						if term_keys.include?(:not_match)
-							nested_query = get_nested_query_with_a_not_term(path, terms)
-						elsif term_keys.length > 1 && !term_keys.include?(:not_match)
-							nested_query = get_nested_query_bool_filter_query(path, terms)
-						elsif term_keys.length == 1 && build_filter_query
-							nested_query = get_inner_nested_filter_query(path, terms)
-						else
-							nested_query = get_inner_nested_query(path, terms)
+						paths_and_terms.each do |item|
+							key = item[:term].keys[0]
+							value = item[:term][key]
+
+							if key == :terms
+								terms_hash[:terms].push(item[:term])
+							elsif terms_hash.dig(key).nil?
+								terms_hash[key] = [value]
+							else
+								terms_hash[key].push(value)
+							end
 						end
-					end
 
-					nested_query
+						if terms_hash[:terms].empty?
+							terms_hash.delete(:terms)
+						end
+						
+						base = get_nested_query_base(path)
+
+						base[:nested][:query] = { bool: { filter: [] }}
+
+						term_keys.each do |key|
+							if key.to_s.include? ("must")
+								base[:nested][:query][:bool][:filter].push({ bool: { key => terms_hash[key] }})
+							elsif key == :terms
+								terms_hash[key].each {|item| base[:nested][:query][:bool][:filter].push(item) }
+							else
+								base[:nested][:query][:bool][:filter].push({key => terms_hash[key]})
+							end
+						end
+
+						base
+					end
 				end
 
         def organize_info_for_nested_query(nested_query_pairs)
 					paths_and_terms = organize_paths_and_terms_for_query_info(nested_query_pairs)
-            
-					build_filter_query = paths_and_terms.any? do |item|
-						item[:use_filter_key]
-					end
-	
+
 					paths_and_terms_cleaned_up = paths_and_terms.map do |p_and_t|
 						{
 							path: p_and_t[:path],
@@ -89,14 +105,8 @@ module DataMagic
 						}
 					end
 	
-					query_info = {
-						paths_and_terms: paths_and_terms_cleaned_up,
-						build_filter_query: build_filter_query
-					}
-	
-					query_info
+					paths_and_terms_cleaned_up
 				end
-
 
 				def organize_paths_and_terms_for_query_info(nested_query_pairs)
 					paths_and_terms = []
@@ -109,23 +119,17 @@ module DataMagic
 						not_query 	= key.include?("__not")
 						or_query 		= value.is_a? Array
 
-						use_filter_key = false
-
 						if range_query
 							query_term = get_nested_range_query(key, value)
 						elsif or_query && !not_query
 							query_term = { terms: { key => value }}
-							use_filter_key = true
-						elsif not_query
-								query_term = { not_match: { key.chomp("__not") => value }}
 						else
-							query_term = { match: { key => value }}
+							query_term = get_nested_must_match_terms(key, value)
 						end
 
 						paths_and_terms.push({
 							path: path,
-							term: query_term,
-							use_filter_key: use_filter_key
+							term: query_term
 						})
 					end
 
@@ -136,6 +140,83 @@ module DataMagic
 					DataMagic.config.es_data_types["nested"]
 				end
 
+				def outer_range_wrapper(key, range_values)
+					field = key.chomp("__range")
+					range_hash = { 
+						or: {
+							range: {
+								field => range_values
+							}
+						}
+					}
+	
+					range_hash
+				end
+				
+				def get_nested_range_query(key, value)
+					range_params = value.split("..")
+					first, last = range_params
+					last = last.nil? ? [] : last
+					first = first.nil? ? [] : first
+	
+					if !first.empty? && !last.empty?
+						range_values = { gte: first, lte: last } 
+					elsif first.empty?
+						range_values = { lte: last }
+					else
+						range_values = { gte: first }
+					end
+	
+					range_hash = outer_range_wrapper(key, range_values)
+
+					range_hash
+				end
+
+				def get_nested_must_match_terms(key, value)
+					if key.include?("__not")
+						field = key.chomp("__not")
+						must_key = :must_not
+					else
+						field = key
+						must_key = :must
+					end
+
+					if value.is_a? Array
+						term_key = :terms
+					else
+						term_key = :match
+					end
+
+					{ must_key => { term_key => { field => value }}}
+				end
+	
+				def add_must_key_to_bool_on_query_hash(query_hash)
+					query_hash[:query][:bool][:must] = {}
+	
+					query_hash
+				end
+
+        def add_bool_to_query_hash(query_hash)
+					query_hash[:query][:bool] = {}
+				end
+        
+				def add_filter_key_to_bool_on_query_hash(query_hash)
+					query_hash[:query][:bool][:filter] = {}
+	
+					query_hash
+				end
+
+
+				def get_nested_query_base(path)
+					{ 
+						nested: {
+							path: path,
+							inner_hits: {}
+						}
+					}
+				end
+
+				# Combining nested and non-nested
 				def incorporate_nested_with_nonfilter_query(query_hash, nested_query_pairs)
 					nested_query = build_nested_query(nested_query_pairs)
 	
@@ -241,117 +322,6 @@ module DataMagic
 
 					query_hash
 				end
-
-
-				def outer_range_wrapper(key, range_values)
-					field = key.chomp("__range")
-					
-					range_hash = { 
-						or: [{
-							range: {
-								field => range_values
-							}
-						}]
-					}
-	
-					range_hash
-				end
-				
-				def get_nested_range_query(key, value)
-					range_params = value.split("..")
-					first, last = range_params
-					last = last.nil? ? [] : last
-					first = first.nil? ? [] : first
-	
-					if !first.empty? && !last.empty?
-						range_values = { gte: first, lte: last } 
-					elsif first.empty?
-						range_values = { lte: last }
-					else
-						range_values = { gte: first }
-					end
-	
-					range_hash = outer_range_wrapper(key, range_values)
-					
-					range_hash
-				end
-
-				def get_nested_query_with_a_not_term(path, terms)
-					not_hash = {}
-	
-					terms.each do |h|
-						if h.keys[0] == :match
-							not_hash[:must] ={}
-							value = h[:match][h[:match].keys[0]]
-							if value.is_a? Array
-								not_hash[:must][:terms] = h[:match]
-							else
-								not_hash[:must][:match] = h[:match]
-							end
-						elsif h.keys[0] == :not_match
-							not_hash[:must_not] ={}
-							value = h[:not_match][h[:not_match].keys[0]]
-							if value.is_a? Array
-								not_hash[:must_not][:terms] = h[:not_match]
-							else
-								not_hash[:must_not][:match] = h[:not_match]
-							end
-						end
-					end
-
-					nested_base = get_nested_query_base(path)
-					nested_base[:nested][:query] = { bool: not_hash }
-	
-					nested_base
-				end
-	
-				def add_must_key_to_bool_on_query_hash(query_hash)
-					query_hash[:query][:bool][:must] = {}
-	
-					query_hash
-				end
-
-        def add_bool_to_query_hash(query_hash)
-					query_hash[:query][:bool] = {}
-				end
-        
-				def add_filter_key_to_bool_on_query_hash(query_hash)
-					query_hash[:query][:bool][:filter] = {}
-	
-					query_hash
-				end
-
-
-				def get_nested_query_base(path)
-					{ 
-						nested: {
-							path: path,
-							inner_hits: {}
-						}
-					}
-				end
-
-				def get_inner_nested_query(path, matches)
-					base = get_nested_query_base(path)
-					base[:nested][:query] = { bool: { must: matches }}
-
-					base
-				end
-
-				def get_nested_query_bool_filter_query(path, terms)
-					base = get_nested_query_base(path)
-					base[:nested][:query] = { bool: { filter: terms }}
-
-					base
-				end
-	
-				def get_inner_nested_filter_query(path, terms)
-					base = get_nested_query_base(path)
-					base[:nested][:filter] = terms
-
-					base
-				end
-
 			end
 		end
 	end

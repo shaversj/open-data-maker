@@ -47,8 +47,12 @@ describe DataMagic::QueryBuilder do
       path: "2016.programs.cip_4_digit",
       query: {
         bool: {
-          must: [{
-            match: { "2016.programs.cip_4_digit.code" => "1312" }
+          filter: [{
+            bool: {
+              must: [{
+                match: { "2016.programs.cip_4_digit.code" => "1312" }
+              }]
+            }
           }]
         }
       }
