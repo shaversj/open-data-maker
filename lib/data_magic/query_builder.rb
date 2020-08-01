@@ -144,7 +144,12 @@ module DataMagic
   
           if (field_type == "string" || field_type == "integer") && value.is_a?(String) && /,/.match(value) # lists of integers or strings
             value = value.split(',').map do |str|
-              str.tr("[]","").to_i
+              if field_type == "integer"
+                formatted_string = str.tr("[]","").to_i
+              else
+                formatted_string = str.tr("[]","")
+              end
+              formatted_string
             end
           end
           nested_query_pairs[key] = value
