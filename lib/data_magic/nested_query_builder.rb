@@ -76,16 +76,18 @@ module DataMagic
 						if terms_hash[:terms].empty?
 							terms_hash.delete(:terms)
 						end
-						
+
 						base = get_nested_query_base(path)
 
 						base[:nested][:query] = { bool: { filter: [] }}
 
 						term_keys.each do |key|
-							if key.to_s.include? ("must")
+							if key.to_s.include?("must")
 								base[:nested][:query][:bool][:filter].push({ bool: { key => terms_hash[key] }})
 							elsif key == :terms
 								terms_hash[key].each {|item| base[:nested][:query][:bool][:filter].push(item) }
+							elsif key == :or
+								terms_hash[key].each {|item| base[:nested][:query][:bool][:filter].push({:or => [item]})}
 							else
 								base[:nested][:query][:bool][:filter].push({key => terms_hash[key]})
 							end
