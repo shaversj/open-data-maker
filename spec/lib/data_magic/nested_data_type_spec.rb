@@ -40,7 +40,9 @@ describe DataMagic::QueryBuilder do
           bool: {
             filter: {
               nested: {
-                inner_hits: {},
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                },
                 path: "2016.programs.cip_4_digit",
                 query: {
                   bool: {
@@ -80,7 +82,9 @@ describe DataMagic::QueryBuilder do
           bool: {
             filter: {
               nested: {
-                inner_hits: {},
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                },
                 path: "2016.programs.cip_4_digit",
                 query: {
                   bool: {
@@ -117,7 +121,9 @@ describe DataMagic::QueryBuilder do
           bool: { 
             filter: {
               nested: {
-                inner_hits: {},
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                },
                 path: "2016.programs.cip_4_digit",
                 query: {
                   bool: {
@@ -144,7 +150,9 @@ describe DataMagic::QueryBuilder do
           bool: { 
             filter: {
               nested: {
-                inner_hits: {},
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                },
                 path: "2016.programs.cip_4_digit",
                 query: {
                   bool: {
@@ -177,7 +185,9 @@ describe DataMagic::QueryBuilder do
           bool: { 
             filter: {
               nested: {
-                inner_hits: {},
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                },
                 path: "2016.programs.cip_4_digit",
                 query: {
                   bool: {
@@ -204,7 +214,9 @@ describe DataMagic::QueryBuilder do
         { bool: { 
           filter: {
             nested: {
-              inner_hits: {},
+              inner_hits: {
+                  size: DataMagic::MAX_NESTED_RESULT
+              },
               path: "2016.programs.cip_4_digit",
               query: {
                 bool: {
@@ -235,7 +247,9 @@ describe DataMagic::QueryBuilder do
           bool: { 
             filter: {
               nested: {
-                inner_hits: {},
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                },
                 path: "2016.programs.cip_4_digit",
                 query: {
                   bool: {
@@ -390,7 +404,9 @@ describe DataMagic::QueryBuilder do
                     }]
                   }
                 },
-                inner_hits: {}
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                }
               }
             }
           }
@@ -420,7 +436,9 @@ describe DataMagic::QueryBuilder do
                     }]
                   }
                 },
-                inner_hits: {}
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                }
               }
             }
           }
@@ -450,7 +468,9 @@ describe DataMagic::QueryBuilder do
                     }]
                   }
                 },
-                inner_hits: {}
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                }
               }
             }
           }
@@ -489,7 +509,9 @@ describe DataMagic::QueryBuilder do
                     }]
                   }
                 },
-                inner_hits: {}
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                }
               }
             }
           }
@@ -521,7 +543,9 @@ describe DataMagic::QueryBuilder do
                     }]
                   }
                 },
-                inner_hits: {}
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                }
               }
             }
           }
@@ -551,7 +575,9 @@ describe DataMagic::QueryBuilder do
                     }]
                   }
                 },
-                inner_hits: {}
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                }
               }
             }
           }
@@ -590,7 +616,9 @@ describe DataMagic::QueryBuilder do
                     }]
                   }
                 },
-                inner_hits: {}
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                }
               }
             }
           }
@@ -629,7 +657,9 @@ describe DataMagic::QueryBuilder do
                     }]
                   }
                 },
-                inner_hits: {}
+                inner_hits: {
+                    size: DataMagic::MAX_NESTED_RESULT
+                }
               }
             }
           }

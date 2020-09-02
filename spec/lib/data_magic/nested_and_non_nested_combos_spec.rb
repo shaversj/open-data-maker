@@ -43,7 +43,9 @@ describe DataMagic::QueryBuilder do
   }}
   let(:nested_match) {{
     nested: {
-      inner_hits: {},
+      inner_hits: {
+          size: DataMagic::MAX_NESTED_RESULT
+      },
       path: "2016.programs.cip_4_digit",
       query: {
         bool: {

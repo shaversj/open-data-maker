@@ -213,7 +213,9 @@ module DataMagic
 					{ 
 						nested: {
 							path: path,
-							inner_hits: {}
+							inner_hits: {
+									size: DataMagic::MAX_NESTED_RESULT
+							}
 						}
 					}
 				end
