@@ -7,3 +7,6 @@ RUN bundle install
 RUN bundler install --binstubs
 COPY . /myapp
 EXPOSE 3000
+
+# Start Dev Server
+CMD ["padrino", "start", "-h", "0.0.0.0"]
