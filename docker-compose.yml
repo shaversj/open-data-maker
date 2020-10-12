@@ -10,7 +10,7 @@ services:
   web:
     build: .
     command: bash -c
-      "padrino start -h 0.0.0.0"
+      "bundle exec padrino start -h 0.0.0.0"
     volumes:
       - .:/myapp
     ports:
