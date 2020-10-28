@@ -8,6 +8,8 @@ services:
       discovery.type: single-node
     ports:
       - "9200:9200"
+    volumes:
+      - ./.docker/data/es:/usr/share/elasticsearch/data
   web:
     build: .
     command: bash -c
