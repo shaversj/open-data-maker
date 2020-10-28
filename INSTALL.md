@@ -6,6 +6,46 @@ If you just want to install and run, then you can just download a
 You will still need the the dependencies below, but you don't need to
 clone the git repo for the source code.
 
+# Docker
+## TODO - Refine Documentation
+
+### First run.
+- Start docker, `web` will fail due to missing index, that is ok, leave ES up.
+
+```
+docker-compose up
+```
+
+- Run rake process first so padrino can boot
+
+```
+docker-compose run web rake import
+```
+
+- After indexing completes, take it all down
+
+```
+docker-compose down
+```
+
+- Start it back up, `web` should run fine.
+
+```
+docker-compose up
+```
+
+### After initial run
+
+```
+docker-compose up
+```
+
+- or run it detached with
+
+```
+docker-compose up -d
+```
+
 ## Install Prerequisites
 
 You can run our bootstrap script to make sure you have all the dependencies.
