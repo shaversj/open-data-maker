@@ -11,6 +11,6 @@ COPY Gemfile.lock /myapp/Gemfile.lock
 RUN bundle install
 #RUN bundle install --binstubs
 COPY . /myapp
-#RUN chmod +x docker-entrypoint.sh
+RUN chmod +x /myapp/wait-for-it.sh
 #ENTRYPOINT ["docker-entrypoint.sh"]
 EXPOSE 3000

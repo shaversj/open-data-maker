@@ -9,7 +9,6 @@ clone the git repo for the source code.
 # Docker
 ## TODO - Refine Documentation
 
-
 ### First run.
 - Start docker, `web` will fail due to missing index, that is ok, leave ES up.
 
