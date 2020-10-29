@@ -7,32 +7,21 @@ You will still need the the dependencies below, but you don't need to
 clone the git repo for the source code.
 
 # Docker
-## TODO - Refine Documentation
 
-### First run.
-- Start docker, `web` will fail due to missing index, that is ok, leave ES up.
+### First run
+- Start docker
 
 ```
 docker-compose up
 ```
 
-- Run rake process first so padrino can boot
+- Run `rake import` in the `web` container.
 
 ```
 docker-compose run web rake import
 ```
 
-- After indexing completes, take it all down
-
-```
-docker-compose down
-```
-
-- Start it back up, `web` should run fine.
-
-```
-docker-compose up
-```
+- Application is available at `http://localhost:3000`
 
 ### After initial run
 
