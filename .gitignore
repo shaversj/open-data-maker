@@ -31,3 +31,4 @@ client_secret.json
 
 # Docker Data files
 ./docker/data/es*
+bin
