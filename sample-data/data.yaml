@@ -45,7 +45,7 @@ dictionary:
   population:
     source: POP10
     description: City population from 2010 Census data
-    type: integer
+    type: long
   location.lat: INTPTLAT
   location.lon: INTPTLONG
   land_area:
