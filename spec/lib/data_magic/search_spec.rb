@@ -251,7 +251,7 @@ describe "DataMagic #search" do
     end
 
     it "can match a field on several given integer values" do
-      response = DataMagic.search({population: "8175133,3792621,2695598,"}, sort: "population:desc")
+      response = DataMagic.search({population: "2410103800,3792621,2695598,"}, sort: "population:desc")
       expect(response["results"].length).to eq(3)
       expect(response["results"][0]['name']).to eq("New York")
       expect(response["results"][1]['name']).to eq("Los Angeles")
