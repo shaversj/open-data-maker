@@ -85,7 +85,6 @@ module DataMagic
 
     full_query = {
       index: index_name,
-      type: 'document',
       body: query_body
     }
 
@@ -356,11 +355,6 @@ module DataMagic
                             type: 'custom'
                         }
                     }
-                }
-            },
-            mappings: {
-                document: { # type 'document' is always used for external indexed docs
-                   properties: es_types
                 }
             }
         }
